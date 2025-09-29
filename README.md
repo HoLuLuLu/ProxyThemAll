@@ -4,12 +4,36 @@
 [![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 
+## Description
+
+__ProxyThemAll__ is an IntelliJ IDEA plugin that provides a convenient way to toggle proxy settings on and off directly
+from within the IDE.
+
+__Key Features:__
+
+- __One-click proxy toggle__: Adds a "ProxyThemAll" action to the Tools menu that allows you to quickly enable or
+  disable proxy settings
+- __Smart state detection__: Automatically detects whether proxy is currently enabled, disabled, or not configured
+- __Configuration preservation__: When you disable the proxy, it remembers your previous proxy settings so you can
+  easily re-enable them later
+- __User notifications__: Shows helpful balloon notifications to inform you of the current proxy state and any actions
+  taken
+- __Configuration validation__: Alerts you if proxy settings need to be configured before the toggle functionality can
+  work
+
+__Use Case:__ This plugin is particularly useful for developers who frequently need to switch between using a corporate
+proxy (when at work) and direct internet connection (when working from home or other locations), without having to
+manually navigate through IDE settings each time.
+
+The plugin integrates seamlessly into IntelliJ IDEA's interface and uses the IDE's built-in proxy configuration system,
+making it a lightweight and reliable solution for proxy management.
+
 ## Template ToDo list
 - [x] Create a new [IntelliJ Platform Plugin Template][template] project.
 - [x] Get familiar with the [template documentation][template].
 - [x] Adjust the [pluginGroup](./gradle.properties) and [pluginName](./gradle.properties), as well as
   the [id](./src/main/resources/META-INF/plugin.xml) and [sources package](./src/main/kotlin).
-- [ ] Adjust the plugin description in `README` (see [Tips][docs:plugin-description])
+- [x] Adjust the plugin description in `README` (see [Tips][docs:plugin-description])
 - [x] Review
   the [Legal Agreements](https://plugins.jetbrains.com/docs/marketplace/legal-agreements.html?from=IJPluginTemplate).
 - [ ] [Publish a plugin manually](https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate) for the first time.
@@ -27,6 +51,24 @@ This specific section is a source for the [plugin.xml](/src/main/resources/META-
 To keep everything working, do not remove `<!-- ... -->` sections. 
 <!-- Plugin description end -->
 
+## Project Structure
+
+```text
+src/main/kotlin/org/holululu/proxythemall/
+├── actions/
+│   └── ProxyThemAllAction.kt          # Simplified entry point that delegates to ProxyController
+├── core/
+│   └── ProxyController.kt             # Orchestrates the proxy toggle workflow and user notifications
+├── models/
+│   ├── NotificationData.kt            # Type-safe data structure for notification information
+│   └── ProxyState.kt                  # Enum defining the three possible proxy states
+├── notifications/
+│   └── NotificationService.kt         # Handles all user notifications with consistent formatting
+├── services/
+│   └── ProxyService.kt                # Manages all proxy-related operations (enable/disable/state detection)
+└── utils/
+    └── NotificationMessages.kt        # Centralized, reusable notification messages
+```
 ## Installation
 
 - Using the IDE built-in plugin system:
