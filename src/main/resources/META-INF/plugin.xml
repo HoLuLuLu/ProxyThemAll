@@ -6,10 +6,14 @@
 
     <depends>com.intellij.modules.platform</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
-
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="org.holululu.proxythemall.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="org.holululu.proxythemall.startup.MyProjectActivity"/>
+        <notificationGroup id="ProxyThemAll Notifications" displayType="BALLOON"/>
     </extensions>
+
+    <actions>
+        <action id="ProxyThemAll.Action" class="org.holululu.proxythemall.actions.ProxyThemAllAction"
+                text="ProxyThemAll" description="ProxyThemAll plugin action">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>
