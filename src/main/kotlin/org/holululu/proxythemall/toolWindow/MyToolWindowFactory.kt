@@ -1,4 +1,4 @@
-package com.github.holululu.proxythemall.toolWindow
+package org.holululu.proxythemall.toolWindow
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -8,8 +8,8 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.content.ContentFactory
-import com.github.holululu.proxythemall.MyBundle
-import com.github.holululu.proxythemall.services.MyProjectService
+import org.holululu.proxythemall.MyBundle
+import org.holululu.proxythemall.services.MyProjectService
 import javax.swing.JButton
 
 

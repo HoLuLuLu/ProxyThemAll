@@ -1,4 +1,4 @@
-package com.github.holululu.proxythemall
+package org.holululu.proxythemall
 
 import com.intellij.DynamicBundle
 import org.jetbrains.annotations.NonNls

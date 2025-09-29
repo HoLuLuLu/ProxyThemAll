@@ -1,9 +1,9 @@
-package com.github.holululu.proxythemall.services
+package org.holululu.proxythemall.services
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
-import com.github.holululu.proxythemall.MyBundle
+import org.holululu.proxythemall.MyBundle
 
 @Service(Service.Level.PROJECT)
 class MyProjectService(project: Project) {
