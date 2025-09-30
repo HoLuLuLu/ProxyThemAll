@@ -4,8 +4,6 @@
 [![Version](https://img.shields.io/jetbrains/plugin/v/28611-proxythemall.svg)](https://plugins.jetbrains.com/plugin/28611-proxythemall)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/28611-proxythemall.svg)](https://plugins.jetbrains.com/plugin/28611-proxythemall)
 
-<iframe width="245px" height="48px" src="https://plugins.jetbrains.com/embeddable/install/28611"></iframe>
-
 ## Description
 
 <!-- Plugin description -->
