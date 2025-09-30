@@ -1,7 +1,6 @@
 package org.holululu.proxythemall.notifications
 
 import com.intellij.notification.NotificationGroupManager
-import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.Project
 import org.holululu.proxythemall.models.NotificationData
 
@@ -14,7 +13,7 @@ class NotificationService {
         @JvmStatic
         val instance: NotificationService by lazy { NotificationService() }
 
-        private const val NOTIFICATION_GROUP_ID = "ProxyThemAll Notifications"
+        private const val NOTIFICATION_GROUP_ID = "ProxyThemAll.Notifications"
     }
 
     /**
@@ -29,12 +28,5 @@ class NotificationService {
                 notificationData.type
             )
             .notify(project)
-    }
-
-    /**
-     * Shows a notification with individual parameters
-     */
-    fun showNotification(project: Project?, title: String, message: String, type: NotificationType) {
-        showNotification(project, NotificationData(title, message, type))
     }
 }

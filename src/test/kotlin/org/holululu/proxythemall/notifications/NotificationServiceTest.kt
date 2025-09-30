@@ -20,28 +20,6 @@ class NotificationServiceTest {
     }
 
     @Test
-    fun `showNotification methods should exist with correct signatures`() {
-        // Given
-        val service = NotificationService()
-
-        // When & Then
-        val methods = service.javaClass.methods.filter { it.name == "showNotification" }
-        assert(methods.size >= 2) { "Should have at least 2 showNotification methods" }
-
-        // Check for method with NotificationData parameter
-        val dataMethod = methods.find { method ->
-            method.parameterTypes.any { it.simpleName == "NotificationData" }
-        }
-        assert(dataMethod != null) { "Should have showNotification method with NotificationData parameter" }
-
-        // Check for method with individual parameters
-        val paramMethod = methods.find { method ->
-            method.parameterCount == 4 && method.parameterTypes.any { it.simpleName == "NotificationType" }
-        }
-        assert(paramMethod != null) { "Should have showNotification method with individual parameters" }
-    }
-
-    @Test
     fun `NotificationData should be properly structured`() {
         // Given & When
         val notificationData = NotificationData(

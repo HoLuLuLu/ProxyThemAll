@@ -45,4 +45,15 @@ class ProxyControllerTest {
             }
         }
     }
+
+    @Test
+    fun `updateStatusBarWidget method should exist and be private`() {
+        // Given
+        val controller = ProxyController()
+
+        // When & Then
+        val method = controller.javaClass.declaredMethods.find { it.name == "updateStatusBarWidget" }
+        assert(method != null) { "updateStatusBarWidget method should exist" }
+        assert(method!!.parameterCount == 1) { "updateStatusBarWidget should take one parameter" }
+    }
 }

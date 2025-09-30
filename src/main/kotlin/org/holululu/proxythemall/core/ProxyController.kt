@@ -1,10 +1,13 @@
 package org.holululu.proxythemall.core
 
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.wm.WindowManager
+import org.holululu.proxythemall.listeners.ProxyStateChangeManager
 import org.holululu.proxythemall.models.ProxyState
 import org.holululu.proxythemall.notifications.NotificationService
 import org.holululu.proxythemall.services.ProxyService
 import org.holululu.proxythemall.utils.NotificationMessages
+import org.holululu.proxythemall.widgets.ProxyStatusBarWidget
 
 /**
  * Controller that orchestrates proxy toggle operations and user notifications
@@ -18,6 +21,7 @@ class ProxyController {
 
     private val proxyService = ProxyService.instance
     private val notificationService = NotificationService.instance
+    private val stateChangeManager = ProxyStateChangeManager.instance
 
     /**
      * Handles the proxy toggle action and shows appropriate notifications
@@ -28,17 +32,31 @@ class ProxyController {
         when (currentState) {
             ProxyState.ENABLED -> {
                 proxyService.toggleProxy()
+                stateChangeManager.notifyStateChanged() // Notify listeners about the state change
                 notificationService.showNotification(project, NotificationMessages.proxyDisabled())
+                updateStatusBarWidget(project)
             }
 
             ProxyState.DISABLED -> {
                 proxyService.toggleProxy()
+                stateChangeManager.notifyStateChanged() // Notify listeners about the state change
                 notificationService.showNotification(project, NotificationMessages.proxyEnabled())
+                updateStatusBarWidget(project)
             }
 
             ProxyState.NOT_CONFIGURED -> {
                 notificationService.showNotification(project, NotificationMessages.proxyConfigurationRequired())
             }
+        }
+    }
+
+    /**
+     * Updates the status bar widget to reflect the current proxy state
+     */
+    private fun updateStatusBarWidget(project: Project?) {
+        project?.let { p ->
+            val statusBar = WindowManager.getInstance().getStatusBar(p)
+            statusBar?.updateWidget(ProxyStatusBarWidget.WIDGET_ID)
         }
     }
 }
