@@ -10,6 +10,11 @@
         <notificationGroup id="ProxyThemAll.Notifications" displayType="BALLOON"/>
         <statusBarWidgetFactory id="ProxyThemAll.StatusBar"
                                 implementation="org.holululu.proxythemall.widgets.ProxyStatusBarWidgetFactory"/>
+        <applicationConfigurable parentId="other"
+                                 instance="org.holululu.proxythemall.settings.ProxyThemAllConfigurable"
+                                 id="org.holululu.proxythemall.settings"
+                                 displayName="ProxyThemAll"/>
+        <applicationService serviceImplementation="org.holululu.proxythemall.settings.ProxyThemAllSettings"/>
     </extensions>
 
     <actions>
