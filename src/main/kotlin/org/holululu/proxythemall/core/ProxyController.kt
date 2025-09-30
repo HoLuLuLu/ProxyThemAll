@@ -45,7 +45,7 @@ class ProxyController {
             }
 
             ProxyState.NOT_CONFIGURED -> {
-                notificationService.showNotification(project, NotificationMessages.proxyConfigurationRequired())
+                notificationService.showNotification(project, NotificationMessages.proxyConfigurationRequired(project))
             }
         }
     }

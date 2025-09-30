@@ -20,13 +20,19 @@ class NotificationService {
      * Shows a notification with the specified data
      */
     fun showNotification(project: Project?, notificationData: NotificationData) {
-        NotificationGroupManager.getInstance()
+        val notification = NotificationGroupManager.getInstance()
             .getNotificationGroup(NOTIFICATION_GROUP_ID)
             .createNotification(
                 notificationData.title,
                 notificationData.message,
                 notificationData.type
             )
-            .notify(project)
+
+        // Add actions if any are provided
+        notificationData.actions.forEach { action ->
+            notification.addAction(action)
+        }
+
+        notification.notify(project)
     }
 }

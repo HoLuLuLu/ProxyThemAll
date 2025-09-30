@@ -1,5 +1,6 @@
 package org.holululu.proxythemall.notifications
 
+import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationType
 import org.holululu.proxythemall.models.NotificationData
 import org.junit.Test
@@ -32,6 +33,7 @@ class NotificationServiceTest {
         assert(notificationData.title == "Test Title") { "Title should be set correctly" }
         assert(notificationData.message == "Test Message") { "Message should be set correctly" }
         assert(notificationData.type == NotificationType.INFORMATION) { "Type should be set correctly" }
+        assert(notificationData.actions.isEmpty()) { "Actions should be empty by default" }
     }
 
     @Test
@@ -61,5 +63,25 @@ class NotificationServiceTest {
         // Then
         assert(notificationData.title == "") { "Should handle empty title" }
         assert(notificationData.message == "") { "Should handle empty message" }
+    }
+
+    @Test
+    fun `NotificationData should handle actions`() {
+        // Given
+        val testAction = NotificationAction.createSimple("Test Action") {
+            // Test action implementation
+        }
+
+        // When
+        val notificationData = NotificationData(
+            title = "Test Title",
+            message = "Test Message",
+            type = NotificationType.WARNING,
+            actions = listOf(testAction)
+        )
+
+        // Then
+        assert(notificationData.actions.size == 1) { "Should have one action" }
+        assert(notificationData.actions.first() == testAction) { "Should contain the test action" }
     }
 }

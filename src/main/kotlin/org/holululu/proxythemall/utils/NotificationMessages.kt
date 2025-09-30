@@ -1,6 +1,9 @@
 package org.holululu.proxythemall.utils
 
+import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.project.Project
 import org.holululu.proxythemall.models.NotificationData
 
 /**
@@ -20,9 +23,14 @@ object NotificationMessages {
         type = NotificationType.INFORMATION
     )
 
-    fun proxyConfigurationRequired(): NotificationData = NotificationData(
+    fun proxyConfigurationRequired(project: Project?): NotificationData = NotificationData(
         title = "Proxy Configuration Required",
-        message = "You have to configure a proxy first. Go to IDE Settings > HTTP Proxy to set up your proxy configuration.",
-        type = NotificationType.WARNING
+        message = "You have to configure a proxy first.",
+        type = NotificationType.WARNING,
+        actions = listOf(
+            NotificationAction.createSimple("Open HTTP Proxy Settings") {
+                ShowSettingsUtil.getInstance().showSettingsDialog(project, "HTTP Proxy")
+            }
+        )
     )
 }
