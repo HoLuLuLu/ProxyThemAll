@@ -7,27 +7,25 @@
 ## Description
 
 <!-- Plugin description -->
-__ProxyThemAll__ is an IntelliJ IDEA plugin that provides a convenient way to toggle proxy settings on and off directly
-from within the IDE.
+__ProxyThemAll__ is an IntelliJ IDEA plugin that makes it easy to toggle proxy settings on and off with just one click.
 
 __Key Features:__
 
-- __One-click proxy toggle__: Adds a "ProxyThemAll" action to the Tools menu that allows you to quickly enable or
-  disable proxy settings
-- __Smart state detection__: Automatically detects whether proxy is currently enabled, disabled, or not configured
-- __Configuration preservation__: When you disable the proxy, it remembers your previous proxy settings so you can
-  easily re-enable them later
-- __User notifications__: Shows helpful balloon notifications to inform you of the current proxy state and any actions
-  taken
-- __Configuration validation__: Alerts you if proxy settings need to be configured before the toggle functionality can
-  work
+- __Quick proxy toggle__: Switch proxy on/off instantly from the Tools menu or status bar
+- __Visual status indicator__: See your current proxy state at a glance in the status bar
+- __Smart memory__: Remembers your proxy settings when you turn them off, so you can easily turn them back on
+- __Helpful notifications__: Get notified when proxy state changes or when configuration is needed
+- __Easy setup__: Works with your existing IDE proxy settings - no additional configuration required
 
-__Use Case:__ This plugin is particularly useful for developers who frequently need to switch between using a corporate
-proxy (when at work) and direct internet connection (when working from home or other locations), without having to
-manually navigate through IDE settings each time.
+__Perfect for developers who:__
 
-The plugin integrates seamlessly into IntelliJ IDEA's interface and uses the IDE's built-in proxy configuration system,
-making it a lightweight and reliable solution for proxy management.
+- Work from different locations (office with corporate proxy vs. home without)
+- Need to quickly test applications with and without proxy
+- Want to avoid manually navigating through IDE settings every time
+- Prefer visual indicators and one-click solutions
+
+The plugin adds a simple toggle action to your Tools menu and an optional status bar widget, making proxy management
+effortless and keeping you focused on your development work.
 <!-- Plugin description end -->
 
 ## Project Structure
@@ -35,19 +33,33 @@ making it a lightweight and reliable solution for proxy management.
 ```text
 src/main/kotlin/org/holululu/proxythemall/
 ├── actions/
-│   └── ProxyThemAllAction.kt          # Simplified entry point that delegates to ProxyController
+│   └── ProxyThemAllAction.kt          # Main toggle action in Tools menu
 ├── core/
-│   └── ProxyController.kt             # Orchestrates the proxy toggle workflow and user notifications
+│   └── ProxyController.kt             # Central controller for proxy operations
+├── listeners/
+│   ├── ProxyStateChangeListener.kt    # Handles proxy state change events
+│   ├── ProxyStateChangeManager.kt     # Manages state change notifications
+│   └── WidgetStateChangeListener.kt   # Updates widget when state changes
 ├── models/
-│   ├── NotificationData.kt            # Type-safe data structure for notification information
-│   └── ProxyState.kt                  # Enum defining the three possible proxy states
+│   ├── NotificationData.kt            # Data structure for notifications
+│   └── ProxyState.kt                  # Proxy state enumeration
 ├── notifications/
-│   └── NotificationService.kt         # Handles all user notifications with consistent formatting
+│   └── NotificationService.kt         # User notification management
 ├── services/
-│   └── ProxyService.kt                # Manages all proxy-related operations (enable/disable/state detection)
-└── utils/
-    └── NotificationMessages.kt        # Centralized, reusable notification messages
+│   └── ProxyService.kt                # Core proxy management logic
+├── settings/
+│   ├── ProxyThemAllConfigurable.kt    # Settings UI configuration
+│   └── ProxyThemAllSettings.kt        # Settings persistence
+├── utils/
+│   └── NotificationMessages.kt        # Notification message templates
+└── widgets/
+    ├── ProxyIcons.kt                  # Status bar icons
+    ├── ProxyStatusBarWidget.kt        # Status bar widget implementation
+    └── ProxyStatusBarWidgetFactory.kt # Widget factory for IDE integration
 ```
+
+The project also includes comprehensive test coverage in `src/test/kotlin/` mirroring the main source structure.
+
 ## Installation
 
 - Using the IDE built-in plugin system:
