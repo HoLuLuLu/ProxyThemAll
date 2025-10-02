@@ -14,17 +14,9 @@ class ProxyServiceTest {
         val service = ProxyService()
 
         // When & Then
-        try {
-            val state = service.getCurrentProxyState()
-            assert(state in listOf(ProxyState.ENABLED, ProxyState.DISABLED, ProxyState.NOT_CONFIGURED)) {
-                "getCurrentProxyState should return a valid ProxyState"
-            }
-        } catch (e: Exception) {
-            // In test environment, ProxySettings.getInstance() may throw exceptions
-            // This is expected behavior when IntelliJ platform is not fully initialized
-            assert(e is NullPointerException || e is IllegalStateException) {
-                "Expected NPE or IllegalStateException in test environment, got: ${e.javaClass.simpleName}"
-            }
+        val state = service.getCurrentProxyState()
+        assert(state in listOf(ProxyState.ENABLED, ProxyState.DISABLED, ProxyState.NOT_CONFIGURED)) {
+            "getCurrentProxyState should return a valid ProxyState, got: $state"
         }
     }
 
@@ -34,17 +26,24 @@ class ProxyServiceTest {
         val service = ProxyService()
 
         // When & Then
+        val result = service.toggleProxy()
+        assert(result in listOf(ProxyState.ENABLED, ProxyState.DISABLED, ProxyState.NOT_CONFIGURED)) {
+            "toggleProxy should return a valid ProxyState, got: $result"
+        }
+    }
+
+    @Test
+    fun `getCurrentProxyConfiguration should not throw exceptions`() {
+        // Given
+        val service = ProxyService()
+
+        // When & Then
         try {
-            val result = service.toggleProxy()
-            assert(result in listOf(ProxyState.ENABLED, ProxyState.DISABLED, ProxyState.NOT_CONFIGURED)) {
-                "toggleProxy should return a valid ProxyState"
-            }
+            service.getCurrentProxyConfiguration()
+            // Configuration can be null in test environment, which is acceptable
+            assert(true) { "getCurrentProxyConfiguration should not throw exceptions" }
         } catch (e: Exception) {
-            // In test environment, ProxySettings.getInstance() may throw exceptions
-            // This is expected behavior when IntelliJ platform is not fully initialized
-            assert(e is NullPointerException || e is IllegalStateException) {
-                "Expected NPE or IllegalStateException in test environment, got: ${e.javaClass.simpleName}"
-            }
+            assert(false) { "getCurrentProxyConfiguration should handle exceptions gracefully, got: ${e.javaClass.simpleName}: ${e.message}" }
         }
     }
 

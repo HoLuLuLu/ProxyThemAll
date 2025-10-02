@@ -1,5 +1,6 @@
 package org.holululu.proxythemall.core
 
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.WindowManager
 import org.holululu.proxythemall.listeners.ProxyStateChangeManager
@@ -13,12 +14,17 @@ import org.holululu.proxythemall.widgets.ProxyStatusBarWidget
 
 /**
  * Controller that orchestrates proxy toggle operations and user notifications
+ *
+ * This controller coordinates between the core ProxyService and the specialized
+ * Git and Gradle proxy services to provide a unified proxy management experience.
  */
 class ProxyController {
 
     companion object {
         @JvmStatic
         val instance: ProxyController by lazy { ProxyController() }
+
+        private val LOG = Logger.getInstance(ProxyController::class.java)
     }
 
     private val proxyService = ProxyService.instance
@@ -31,87 +37,129 @@ class ProxyController {
      * Handles the proxy toggle action and shows appropriate notifications
      */
     fun handleProxyToggle(project: Project?) {
-        val currentState = proxyService.getCurrentProxyState()
+        try {
+            val currentState = proxyService.getCurrentProxyState()
+            LOG.debug("Current proxy state: $currentState")
 
-        when (currentState) {
-            ProxyState.ENABLED -> {
-                proxyService.toggleProxy()
-                stateChangeManager.notifyStateChanged() // Notify listeners about the state change
+            when (currentState) {
+                ProxyState.ENABLED -> {
+                    handleProxyDisable(project)
+                }
 
-                // Configure Git and Gradle proxy and show unified notification
-                var gitStatus = ""
-                var gradleStatus = ""
-                var completedCount = 0
+                ProxyState.DISABLED -> {
+                    handleProxyEnable(project)
+                }
 
-                val onComplete = {
-                    completedCount++
-                    if (completedCount == 2) {
-                        val combinedStatus = buildString {
-                            if (gitStatus.isNotEmpty()) append("Git: $gitStatus")
-                            if (gradleStatus.isNotEmpty()) {
-                                if (isNotEmpty()) append(", ")
-                                append("Gradle: $gradleStatus")
-                            }
-                        }
-                        notificationService.showNotification(
-                            project,
-                            NotificationMessages.proxyDisabled(combinedStatus)
-                        )
+                ProxyState.NOT_CONFIGURED -> {
+                    LOG.info("Proxy not configured - showing configuration required notification")
+                    notificationService.showNotification(
+                        project,
+                        NotificationMessages.proxyConfigurationRequired(project)
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            LOG.error("Failed to handle proxy toggle", e)
+            // Show error notification to user
+            notificationService.showNotification(
+                project,
+                NotificationMessages.proxyDisabled("Error: ${e.message ?: "Unknown error occurred"}")
+            )
+        }
+    }
+
+    /**
+     * Handles disabling the proxy
+     */
+    private fun handleProxyDisable(project: Project?) {
+        try {
+            val newState = proxyService.toggleProxy()
+            if (newState == ProxyState.DISABLED) {
+                stateChangeManager.notifyStateChanged()
+                configureProxyServices(project, false)
+                updateStatusBarWidget(project)
+                LOG.debug("Proxy disabled successfully")
+            } else {
+                LOG.warn("Expected DISABLED state after toggle, got: $newState")
+            }
+        } catch (e: Exception) {
+            LOG.error("Failed to disable proxy", e)
+            throw e
+        }
+    }
+
+    /**
+     * Handles enabling the proxy
+     */
+    private fun handleProxyEnable(project: Project?) {
+        try {
+            val newState = proxyService.toggleProxy()
+            if (newState == ProxyState.ENABLED) {
+                stateChangeManager.notifyStateChanged()
+                configureProxyServices(project, true)
+                updateStatusBarWidget(project)
+                LOG.debug("Proxy enabled successfully")
+            } else {
+                LOG.warn("Expected ENABLED state after toggle, got: $newState")
+            }
+        } catch (e: Exception) {
+            LOG.error("Failed to enable proxy", e)
+            throw e
+        }
+    }
+
+    /**
+     * Configures Git and Gradle proxy services and shows unified notification
+     */
+    private fun configureProxyServices(project: Project?, isEnabled: Boolean) {
+        var gitStatus = ""
+        var gradleStatus = ""
+        var completedCount = 0
+
+        val onComplete = {
+            completedCount++
+            if (completedCount == 2) {
+                val combinedStatus = buildString {
+                    if (gitStatus.isNotEmpty()) append("Git: $gitStatus")
+                    if (gradleStatus.isNotEmpty()) {
+                        if (isNotEmpty()) append(", ")
+                        append("Gradle: $gradleStatus")
                     }
                 }
 
-                gitProxyService.configureGitProxy(project) { status ->
-                    gitStatus = status
-                    onComplete()
+                val notification = if (isEnabled) {
+                    NotificationMessages.proxyEnabled(combinedStatus)
+                } else {
+                    NotificationMessages.proxyDisabled(combinedStatus)
                 }
 
-                gradleProxyService.configureGradleProxy(project) { status ->
-                    gradleStatus = status
-                    onComplete()
-                }
-
-                updateStatusBarWidget(project)
+                notificationService.showNotification(project, notification)
+                LOG.debug("Proxy services configured: $combinedStatus")
             }
+        }
 
-            ProxyState.DISABLED -> {
-                proxyService.toggleProxy()
-                stateChangeManager.notifyStateChanged() // Notify listeners about the state change
-
-                // Configure Git and Gradle proxy and show unified notification
-                var gitStatus = ""
-                var gradleStatus = ""
-                var completedCount = 0
-
-                val onComplete = {
-                    completedCount++
-                    if (completedCount == 2) {
-                        val combinedStatus = buildString {
-                            if (gitStatus.isNotEmpty()) append("Git: $gitStatus")
-                            if (gradleStatus.isNotEmpty()) {
-                                if (isNotEmpty()) append(", ")
-                                append("Gradle: $gradleStatus")
-                            }
-                        }
-                        notificationService.showNotification(project, NotificationMessages.proxyEnabled(combinedStatus))
-                    }
-                }
-
-                gitProxyService.configureGitProxy(project) { status ->
-                    gitStatus = status
-                    onComplete()
-                }
-
-                gradleProxyService.configureGradleProxy(project) { status ->
-                    gradleStatus = status
-                    onComplete()
-                }
-
-                updateStatusBarWidget(project)
+        // Configure Git proxy
+        try {
+            gitProxyService.configureGitProxy(project) { status ->
+                gitStatus = status
+                onComplete()
             }
+        } catch (e: Exception) {
+            LOG.warn("Failed to configure Git proxy", e)
+            gitStatus = "Git configuration failed"
+            onComplete()
+        }
 
-            ProxyState.NOT_CONFIGURED -> {
-                notificationService.showNotification(project, NotificationMessages.proxyConfigurationRequired(project))
+        // Configure Gradle proxy
+        try {
+            gradleProxyService.configureGradleProxy(project) { status ->
+                gradleStatus = status
+                onComplete()
             }
+        } catch (e: Exception) {
+            LOG.warn("Failed to configure Gradle proxy", e)
+            gradleStatus = "Gradle configuration failed"
+            onComplete()
         }
     }
 

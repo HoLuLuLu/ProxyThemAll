@@ -2,8 +2,9 @@ package org.holululu.proxythemall.services
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.net.ProxyConfiguration
+import com.intellij.util.net.ProxyCredentialStore
 import org.holululu.proxythemall.models.ProxyInfo
-import java.lang.reflect.Field
+
 
 /**
  * Service responsible for extracting proxy information from ProxyConfiguration objects
@@ -53,28 +54,35 @@ class ProxyInfoExtractor {
     }
 
     /**
-     * Extracts proxy information from StaticProxyConfiguration using reflection
+     * Extracts proxy information from StaticProxyConfiguration using proper API methods
      */
     private fun extractStaticProxyInfo(proxyConfiguration: ProxyConfiguration.StaticProxyConfiguration): ProxyInfo? {
         return try {
-            val clazz = proxyConfiguration::class.java
+            val host = proxyConfiguration.host
+            val port = proxyConfiguration.port
 
-            val host = extractHostFromStaticProxy(clazz, proxyConfiguration)
-            val port = extractPortFromStaticProxy(clazz, proxyConfiguration)
-
-            if (host.isNullOrBlank() || port == null || port <= 0) {
+            if (host.isBlank() || port <= 0) {
                 LOG.warn("Invalid static proxy configuration: host=$host, port=$port")
                 return null
             }
 
-            val credentials = extractCredentialsFromStaticProxy(clazz, proxyConfiguration)
-            val type = extractProxyTypeFromStaticProxy(clazz, proxyConfiguration)
+
+            // Determine proxy type from protocol
+            val type = when (proxyConfiguration.protocol.toString().uppercase()) {
+                "SOCKS" -> "socks5"
+                "HTTP" -> "http"
+                else -> "http" // Default to HTTP
+            }
+
+            val credentials = ProxyCredentialStore.getInstance().getCredentials(host, port)
+            val username = credentials?.userName
+            val password = credentials?.getPasswordAsString()
 
             ProxyInfo(
                 host = host,
                 port = port,
-                username = credentials.first,
-                password = credentials.second,
+                username = username,
+                password = password,
                 type = type
             )
         } catch (e: Exception) {
@@ -83,72 +91,4 @@ class ProxyInfoExtractor {
         }
     }
 
-    /**
-     * Extracts host information from StaticProxyConfiguration
-     */
-    private fun extractHostFromStaticProxy(clazz: Class<*>, proxyConfiguration: Any): String? {
-        val hostField = findFieldByNames(clazz, "host", "myHost")
-        hostField?.isAccessible = true
-        return hostField?.get(proxyConfiguration) as? String
-    }
-
-    /**
-     * Extracts port information from StaticProxyConfiguration
-     */
-    private fun extractPortFromStaticProxy(clazz: Class<*>, proxyConfiguration: Any): Int? {
-        val portField = findFieldByNames(clazz, "port", "myPort")
-        portField?.isAccessible = true
-        return portField?.get(proxyConfiguration) as? Int
-    }
-
-    /**
-     * Extracts credentials (username and password) from StaticProxyConfiguration
-     */
-    private fun extractCredentialsFromStaticProxy(clazz: Class<*>, proxyConfiguration: Any): Pair<String?, String?> {
-        val usernameField = findFieldByNames(clazz, "login", "username")
-        val passwordField = findFieldByNames(clazz, "password", "plainPassword")
-
-        usernameField?.isAccessible = true
-        passwordField?.isAccessible = true
-
-        val username = usernameField?.get(proxyConfiguration) as? String
-        val password = passwordField?.get(proxyConfiguration) as? String
-
-        return Pair(
-            username?.takeIf { it.isNotBlank() },
-            password?.takeIf { it.isNotBlank() }
-        )
-    }
-
-    /**
-     * Extracts proxy type from StaticProxyConfiguration
-     */
-    private fun extractProxyTypeFromStaticProxy(clazz: Class<*>, proxyConfiguration: Any): String {
-        return try {
-            val protocolField = clazz.getDeclaredField("protocol")
-            protocolField.isAccessible = true
-            val protocol = protocolField[proxyConfiguration]
-            when (protocol.toString().uppercase()) {
-                "SOCKS" -> "socks5"
-                "HTTP" -> "http"
-                else -> "http"
-            }
-        } catch (_: Exception) {
-            "http" // Default to HTTP
-        }
-    }
-
-    /**
-     * Finds a field by trying multiple possible names
-     */
-    private fun findFieldByNames(clazz: Class<*>, vararg fieldNames: String): Field? {
-        for (fieldName in fieldNames) {
-            try {
-                return clazz.getDeclaredField(fieldName)
-            } catch (_: NoSuchFieldException) {
-                // Continue to next field name
-            }
-        }
-        return null
-    }
 }

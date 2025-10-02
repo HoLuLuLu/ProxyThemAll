@@ -2,7 +2,34 @@
 
 # ProxyThemAll Changelog
 
-## [Unreleased]
+## [0.0.3] - 2025-10-07
+
+### Added
+
+- **Gradle Integration**
+    - Gradle proxy configuration support using JVM system properties
+    - Automatic Gradle proxy synchronization with IDE proxy settings
+    - GradleProxyService for managing Gradle-specific proxy configurations
+    - GradleProxyConfigurer for handling gradle.properties file operations
+    - Support for HTTP and HTTPS Gradle proxy configuration
+    - Integration with existing proxy toggle functionality
+
+### Changed
+
+- **Service Layer Refactoring**
+    - Enhanced ProxyController with improved service integration
+    - Updated ProxyService with better error handling and validation
+    - Refactored ProxyInfoExtractor for simplified credential handling
+    - Improved Git proxy configuration with direct credential support
+    - Removed GitCredentialHelper in favor of direct credential management
+
+### Technical Details
+
+- New GradleProxyConfigurer for gradle.properties file management
+- Enhanced ProxyController to support multiple proxy service types
+- Simplified Git proxy configuration without credential helper
+- Extended test coverage for Gradle and Git functionality
+- Removed phase implementation summary files (cleanup)
 
 ## [0.0.2] - 2025-10-02
 

@@ -18,7 +18,10 @@ private const val GLOBAL_FLAG = "--global"
 private const val UNSET_FLAG = "--unset"
 
 /**
- * Service responsible for configuring Git proxy settings
+ * Service responsible for configuring Git proxy settings using direct credentials
+ *
+ * This configurer uses authenticated proxy URLs when credentials are available,
+ * or falls back to host/port only when no credentials are provided.
  */
 class GitProxyConfigurer {
 
@@ -33,6 +36,7 @@ class GitProxyConfigurer {
 
     /**
      * Sets proxy for Git using extracted proxy information
+     * Uses authenticated proxy URLs when credentials are available
      * Returns a status message for inclusion in notifications
      */
     fun setGitProxy(project: Project?, proxyInfo: ProxyInfo, onComplete: (String) -> Unit) {
@@ -47,13 +51,27 @@ class GitProxyConfigurer {
                     if (projectDir != null) {
                         executeGitCommand(projectDir, listOf("config", HTTP_PROXY, proxyUrl))
                         executeGitCommand(projectDir, listOf("config", HTTPS_PROXY, proxyUrl))
+
+                        val statusMessage = if (hasCredentials(proxyInfo)) {
+                            "configured for project with authentication"
+                        } else {
+                            "configured for project"
+                        }
+                        
                         LOG.info("Git proxy configured for project: $proxyUrl")
-                        onComplete("configured for project")
+                        onComplete(statusMessage)
                     } else {
                         executeGitCommand(null, listOf("config", GLOBAL_FLAG, HTTP_PROXY, proxyUrl))
                         executeGitCommand(null, listOf("config", GLOBAL_FLAG, HTTPS_PROXY, proxyUrl))
+
+                        val statusMessage = if (hasCredentials(proxyInfo)) {
+                            "configured globally with authentication"
+                        } else {
+                            "configured globally"
+                        }
+                        
                         LOG.info("Git proxy configured globally: $proxyUrl")
-                        onComplete("configured globally")
+                        onComplete(statusMessage)
                     }
                 } catch (e: Exception) {
                     LOG.error("Failed to set Git proxy", e)
@@ -108,6 +126,13 @@ class GitProxyConfigurer {
                 }
             }
         }.queue()
+    }
+
+    /**
+     * Checks if proxy info contains credentials
+     */
+    private fun hasCredentials(proxyInfo: ProxyInfo): Boolean {
+        return !proxyInfo.username.isNullOrBlank() && !proxyInfo.password.isNullOrBlank()
     }
 
     /**

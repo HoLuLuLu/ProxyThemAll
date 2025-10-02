@@ -9,12 +9,13 @@
 
 <!-- Plugin description -->
 __ProxyThemAll__ is an IntelliJ IDEA plugin that makes it easy to toggle proxy settings on and off with just one click,
-including automatic Git proxy synchronization.
+including automatic Git and Gradle proxy synchronization.
 
 __Key Features:__
 
 - __Quick proxy toggle__: Switch proxy on/off instantly from the Tools menu or status bar
 - __Git integration__: Automatically synchronizes Git proxy settings with IDE proxy configuration
+- __Gradle integration__: Automatically configures Gradle proxy settings using JVM system properties
 - __Visual status indicator__: See your current proxy state at a glance in the status bar
 - __Smart memory__: Remembers your proxy settings when you turn them off, so you can easily turn them back on
 - __Helpful notifications__: Get notified when proxy state changes or when configuration is needed
@@ -24,8 +25,8 @@ __Perfect for developers who:__
 
 - Work from different locations (office with corporate proxy vs. home without)
 - Need to quickly test applications with and without proxy
-- Want Git operations to work seamlessly with their proxy setup
-- Want to avoid manually configuring proxy settings in multiple places
+- Want Git and Gradle operations to work seamlessly with their proxy setup
+- Want to avoid manually configuring proxy settings in multiple places (IDE, Git, Gradle)
 - Prefer visual indicators and one-click solutions
 
 The plugin adds a simple toggle action to your Tools menu and an optional status bar widget, making proxy management
@@ -53,9 +54,12 @@ src/main/kotlin/org/holululu/proxythemall/
 ├── services/
 │   ├── ProxyInfoExtractor.kt          # Extracts proxy information from IDE settings
 │   ├── ProxyService.kt                # Core proxy management logic
-│   └── git/
-│       ├── GitProxyConfigurer.kt      # Git proxy configuration management
-│       └── GitProxyService.kt         # Git-specific proxy operations
+│   ├── git/
+│   │   ├── GitProxyConfigurer.kt      # Git proxy configuration management
+│   │   └── GitProxyService.kt         # Git-specific proxy operations
+│   └── gradle/
+│       ├── GradleProxyConfigurer.kt   # Gradle proxy configuration management
+│       └── GradleProxyService.kt      # Gradle-specific proxy operations
 ├── settings/
 │   ├── ProxyThemAllConfigurable.kt    # Settings UI configuration
 │   └── ProxyThemAllSettings.kt        # Settings persistence
