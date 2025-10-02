@@ -46,16 +46,22 @@ src/main/kotlin/org/holululu/proxythemall/
 │   └── WidgetStateChangeListener.kt   # Updates widget when state changes
 ├── models/
 │   ├── NotificationData.kt            # Data structure for notifications
+│   ├── ProxyInfo.kt                   # Proxy information data model
 │   └── ProxyState.kt                  # Proxy state enumeration
 ├── notifications/
 │   └── NotificationService.kt         # User notification management
 ├── services/
-│   └── ProxyService.kt                # Core proxy management logic
+│   ├── ProxyInfoExtractor.kt          # Extracts proxy information from IDE settings
+│   ├── ProxyService.kt                # Core proxy management logic
+│   └── git/
+│       ├── GitProxyConfigurer.kt      # Git proxy configuration management
+│       └── GitProxyService.kt         # Git-specific proxy operations
 ├── settings/
 │   ├── ProxyThemAllConfigurable.kt    # Settings UI configuration
 │   └── ProxyThemAllSettings.kt        # Settings persistence
 ├── utils/
-│   └── NotificationMessages.kt        # Notification message templates
+│   ├── NotificationMessages.kt        # Notification message templates
+│   └── ProxyUrlBuilder.kt             # Utility for building proxy URLs
 └── widgets/
     ├── ProxyIcons.kt                  # Status bar icons
     ├── ProxyStatusBarWidget.kt        # Status bar widget implementation
