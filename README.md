@@ -1,8 +1,9 @@
 # ProxyThemAll
-
 ![Build](https://github.com/HoLuLuLu/ProxyThemAll/workflows/Build/badge.svg)
 [![Version](https://img.shields.io/jetbrains/plugin/v/28611-proxythemall.svg)](https://plugins.jetbrains.com/plugin/28611-proxythemall)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/28611-proxythemall.svg)](https://plugins.jetbrains.com/plugin/28611-proxythemall)
+
+![Plugin Icon](src/main/resources/META-INF/pluginIcon.svg)
 
 ## Description
 

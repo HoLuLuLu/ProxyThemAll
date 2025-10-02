@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" version="1.1" baseProfile="full"
-     width="500" height="500" viewBox="0 0 500 500">
+     width="340" height="340" viewBox="80 80 340 340">
     <defs>
         <!-- Gold ring gradients -->
         <linearGradient id="goldFill" x1="120" y1="120" x2="380" y2="380" gradientUnits="userSpaceOnUse">
