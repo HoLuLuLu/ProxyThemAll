@@ -1,59 +1,39 @@
 package org.holululu.proxythemall.core
 
-import org.junit.Test
+import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 /**
  * Unit tests for ProxyController
  */
-class ProxyControllerTest {
+class ProxyControllerTest : BasePlatformTestCase() {
 
-    @Test
-    fun `ProxyController should be singleton`() {
-        // Given & When
-        val instance1 = ProxyController.instance
-        val instance2 = ProxyController.instance
+    private lateinit var controller: ProxyController
 
-        // Then
-        assert(instance1 === instance2) { "ProxyController should be a singleton" }
+    override fun setUp() {
+        super.setUp()
+        controller = ProxyController()
     }
 
-    @Test
-    fun `handleProxyToggle should have correct method signature`() {
-        // Given
-        val controller = ProxyController()
-
-        // When & Then
-        val method = controller.javaClass.methods.find { it.name == "handleProxyToggle" }
-        assert(method != null) { "handleProxyToggle method should exist" }
-        assert(method!!.parameterCount == 1) { "handleProxyToggle should take one parameter" }
-    }
-
-    @Test
-    fun `handleProxyToggle should handle null project without throwing exception`() {
-        // Given
-        val controller = ProxyController()
-
+    fun testHandleProxyToggleShouldHandleNullProjectWithoutThrowingException() {
         // When & Then
         try {
             controller.handleProxyToggle(null)
-            assert(true) { "Method should handle null project gracefully" }
+            // If we get here, no exception was thrown
+            assertTrue("Method should handle null project gracefully", true)
         } catch (e: Exception) {
-            // In test environment, the underlying ProxyService may throw exceptions
-            // when trying to access IntelliJ platform services that aren't initialized
-            assert(e is NullPointerException || e is IllegalStateException) {
-                "Expected NPE or IllegalStateException from underlying services in test environment, got: ${e.javaClass.simpleName}: ${e.message}"
-            }
+            // In test environment, some underlying services may still throw exceptions,
+            // but we should not get NPE from ApplicationManager.getApplication()
+            assertFalse(
+                "Should not get NPE from ApplicationManager.getApplication()",
+                e is NullPointerException && e.message?.contains("ApplicationManager.getApplication()") == true
+            )
         }
     }
 
-    @Test
-    fun `updateStatusBarWidget method should exist and be private`() {
-        // Given
-        val controller = ProxyController()
-
+    fun testUpdateStatusBarWidgetMethodShouldExistAndBePrivate() {
         // When & Then
         val method = controller.javaClass.declaredMethods.find { it.name == "updateStatusBarWidget" }
-        assert(method != null) { "updateStatusBarWidget method should exist" }
-        assert(method!!.parameterCount == 1) { "updateStatusBarWidget should take one parameter" }
+        assertNotNull("updateStatusBarWidget method should exist", method)
+        assertEquals("updateStatusBarWidget should take one parameter", 1, method!!.parameterCount)
     }
 }

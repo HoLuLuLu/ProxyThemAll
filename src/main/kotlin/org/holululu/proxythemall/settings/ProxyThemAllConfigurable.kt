@@ -42,6 +42,14 @@ class ProxyThemAllConfigurable : Configurable {
                         .comment("Display proxy status indicator in the status bar")
                 }
             }
+
+            group("Git Integration") {
+                row {
+                    checkBox("Apply proxy settings to Git")
+                        .bindSelected(settings::applyProxyToGit)
+                        .comment("Automatically configure Git to use proxy when proxy is enabled")
+                }
+            }
         }
 
         return settingsComponent!!

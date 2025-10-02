@@ -1,22 +1,25 @@
 package org.holululu.proxythemall.actions
 
-import org.junit.Test
+import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 /**
  * Unit tests for ProxyThemAllAction
  */
-class ProxyThemAllActionTest {
+class ProxyThemAllActionTest : BasePlatformTestCase() {
 
-    @Test
-    fun `actionPerformed should not throw exception with null event project`() {
-        // Given
-        val action = ProxyThemAllAction()
+    private lateinit var action: ProxyThemAllAction
 
+    override fun setUp() {
+        super.setUp()
+        action = ProxyThemAllAction()
+    }
+
+    fun testActionPerformedShouldNotThrowExceptionWithNullEventProject() {
         // When & Then - should not throw exception
         // We can't easily create a mock AnActionEvent in this test environment,
         // but we can verify the action class structure is correct
-        assert(action.javaClass.methods.any { it.name == "actionPerformed" }) {
-            "ProxyThemAllAction should have actionPerformed method"
-        }
+        assertTrue(
+            "ProxyThemAllAction should have actionPerformed method",
+            action.javaClass.methods.any { it.name == "actionPerformed" })
     }
 }

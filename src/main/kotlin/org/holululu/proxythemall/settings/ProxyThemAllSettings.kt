@@ -29,6 +29,9 @@ class ProxyThemAllSettings : PersistentStateComponent<ProxyThemAllSettings> {
     // Show status bar widget
     var showStatusBarWidget: Boolean = true
 
+    // Apply proxy settings to Git
+    var applyProxyToGit: Boolean = true
+
     override fun getState(): ProxyThemAllSettings {
         return this
     }

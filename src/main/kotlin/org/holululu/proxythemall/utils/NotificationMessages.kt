@@ -11,15 +11,21 @@ import org.holululu.proxythemall.models.NotificationData
  */
 object NotificationMessages {
 
-    fun proxyEnabled(): NotificationData = NotificationData(
+    fun proxyEnabled(gitStatus: String? = null): NotificationData = NotificationData(
         title = "Proxy Enabled",
-        message = "You are now using a proxy.",
+        message = buildString {
+            append("You are now using a proxy.")
+            gitStatus?.let { append(System.lineSeparator()).append("Git: $it") }
+        },
         type = NotificationType.INFORMATION
     )
 
-    fun proxyDisabled(): NotificationData = NotificationData(
+    fun proxyDisabled(gitStatus: String? = null): NotificationData = NotificationData(
         title = "Proxy Disabled",
-        message = "You are now not using any proxy.",
+        message = buildString {
+            append("You are now not using any proxy.")
+            gitStatus?.let { append(System.lineSeparator()).append("Git: $it") }
+        },
         type = NotificationType.INFORMATION
     )
 

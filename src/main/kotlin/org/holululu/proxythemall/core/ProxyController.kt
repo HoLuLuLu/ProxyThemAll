@@ -6,6 +6,7 @@ import org.holululu.proxythemall.listeners.ProxyStateChangeManager
 import org.holululu.proxythemall.models.ProxyState
 import org.holululu.proxythemall.notifications.NotificationService
 import org.holululu.proxythemall.services.ProxyService
+import org.holululu.proxythemall.services.git.GitProxyService
 import org.holululu.proxythemall.utils.NotificationMessages
 import org.holululu.proxythemall.widgets.ProxyStatusBarWidget
 
@@ -20,6 +21,7 @@ class ProxyController {
     }
 
     private val proxyService = ProxyService.instance
+    private val gitProxyService = GitProxyService.instance
     private val notificationService = NotificationService.instance
     private val stateChangeManager = ProxyStateChangeManager.instance
 
@@ -33,14 +35,22 @@ class ProxyController {
             ProxyState.ENABLED -> {
                 proxyService.toggleProxy()
                 stateChangeManager.notifyStateChanged() // Notify listeners about the state change
-                notificationService.showNotification(project, NotificationMessages.proxyDisabled())
+
+                // Configure Git proxy and show unified notification
+                gitProxyService.configureGitProxy(project) { gitStatus ->
+                    notificationService.showNotification(project, NotificationMessages.proxyDisabled(gitStatus))
+                }
                 updateStatusBarWidget(project)
             }
 
             ProxyState.DISABLED -> {
                 proxyService.toggleProxy()
                 stateChangeManager.notifyStateChanged() // Notify listeners about the state change
-                notificationService.showNotification(project, NotificationMessages.proxyEnabled())
+
+                // Configure Git proxy and show unified notification
+                gitProxyService.configureGitProxy(project) { gitStatus ->
+                    notificationService.showNotification(project, NotificationMessages.proxyEnabled(gitStatus))
+                }
                 updateStatusBarWidget(project)
             }
 
