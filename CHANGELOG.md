@@ -4,6 +4,30 @@
 
 ## [Unreleased]
 
+## [0.0.2] - 2025-10-02
+
+### Added
+
+- **Git Integration**
+    - Automatic Git proxy configuration synchronization
+    - Git proxy settings management alongside IDE proxy settings
+    - Support for HTTP and HTTPS Git proxy configuration
+    - Seamless integration with existing proxy toggle functionality
+    - Git-specific proxy configuration validation and error handling
+
+- **Visual Enhancements**
+    - Added custom plugin icon for better visual identification
+    - Enhanced plugin branding and user experience
+
+### Technical Details
+
+- New GitProxyService for managing Git proxy configurations
+- GitProxyConfigurer for handling Git config file operations
+- Enhanced ProxyController to support Git proxy synchronization
+- Updated ProxyInfo model to include Git proxy state
+- Extended notification system for Git-related operations
+- Additional test coverage for Git functionality
+
 ## [0.0.1] - 2025-09-30
 ### Added
 
