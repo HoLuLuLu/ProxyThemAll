@@ -19,6 +19,8 @@ private const val HTTPS_NO_PROXY = "https.noproxy"
 private const val GLOBAL_FLAG = "--global"
 private const val UNSET_FLAG = "--unset"
 
+private const val GIT_HOSTS_SEPARATOR = ","
+
 /**
  * Service responsible for configuring Git proxy settings using direct credentials
  *
@@ -55,7 +57,7 @@ class GitProxyConfigurer {
                         executeGitCommand(projectDir, listOf("config", HTTPS_PROXY, proxyUrl))
 
                         // Set no-proxy hosts for project
-                        val noProxyHosts = buildNoProxyHostsString(proxyInfo.nonProxyHosts)
+                        val noProxyHosts = proxyInfo.nonProxyHosts.joinToString(GIT_HOSTS_SEPARATOR)
                         if (noProxyHosts.isNotEmpty()) {
                             executeGitCommand(projectDir, listOf("config", HTTP_NO_PROXY, noProxyHosts))
                             executeGitCommand(projectDir, listOf("config", HTTPS_NO_PROXY, noProxyHosts))
@@ -74,7 +76,7 @@ class GitProxyConfigurer {
                         executeGitCommand(null, listOf("config", GLOBAL_FLAG, HTTPS_PROXY, proxyUrl))
 
                         // Set no-proxy hosts globally
-                        val noProxyHosts = buildNoProxyHostsString(proxyInfo.nonProxyHosts)
+                        val noProxyHosts = proxyInfo.nonProxyHosts.joinToString(GIT_HOSTS_SEPARATOR)
                         if (noProxyHosts.isNotEmpty()) {
                             executeGitCommand(null, listOf("config", GLOBAL_FLAG, HTTP_NO_PROXY, noProxyHosts))
                             executeGitCommand(null, listOf("config", GLOBAL_FLAG, HTTPS_NO_PROXY, noProxyHosts))
@@ -156,21 +158,6 @@ class GitProxyConfigurer {
                 }
             }
         }.queue()
-    }
-
-    /**
-     * Builds the no-proxy hosts string for Git configuration
-     * Combines user-defined hosts with essential defaults and formats them for Git (comma-separated)
-     */
-    private fun buildNoProxyHostsString(userNonProxyHosts: Set<String>): String {
-        // Essential defaults that should always be excluded from proxy
-        val essentialDefaults = setOf("localhost", "127.*", "[::1]")
-
-        // Combine user-defined hosts with essential defaults
-        val allNonProxyHosts = essentialDefaults + userNonProxyHosts.filter { it.isNotBlank() }
-
-        // Format for Git: comma-separated string
-        return allNonProxyHosts.joinToString(",")
     }
 
     /**

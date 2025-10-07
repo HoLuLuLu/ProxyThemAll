@@ -21,6 +21,9 @@ class ProxyInfoExtractor {
         private val LOG = Logger.getInstance(ProxyInfoExtractor::class.java)
     }
 
+    // Essential defaults that should always be excluded from proxy
+    val essentialDefaults = setOf("localhost", "127.*", "[::1]")
+
     /**
      * Extracts proxy information from ProxyConfiguration using modern API
      */
@@ -75,8 +78,10 @@ class ProxyInfoExtractor {
                 ProxyProtocol.HTTP -> "http"
             }
 
-            val nonProxyHosts = extractNonProxyHosts(proxyConfiguration)
+            // Combine user-defined hosts with essential defaults
+            val nonProxyHosts = essentialDefaults + extractNonProxyHosts(proxyConfiguration).filter { it.isNotBlank() }
 
+            // Get Credentials for the proxy
             val credentials = ProxyCredentialStore.getInstance().getCredentials(host, port)
             val username = credentials?.userName
             val password = credentials?.getPasswordAsString()

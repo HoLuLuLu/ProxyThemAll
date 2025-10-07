@@ -7,7 +7,8 @@ import com.intellij.openapi.project.Project
 import org.holululu.proxythemall.models.ProxyInfo
 import org.holululu.proxythemall.utils.ProxyUrlBuilder
 import java.io.File
-import java.util.*
+
+private const val GRADLE_HOSTS_SEPERATOR = "|"
 
 /**
  * Service responsible for configuring Gradle proxy settings with direct credential support
@@ -40,6 +41,10 @@ class GradleProxyConfigurer {
         // JVM arguments to enable IDE's ProxySelector and Authenticator
         private const val GRADLE_JVM_ARGS = "org.gradle.jvmargs"
         private const val PROXY_SELECTOR_ARG = "-Djava.net.useSystemProxies=true"
+
+        // ProxyThemAll managed section markers
+        private const val PROXY_SECTION_START = "# === ProxyThemAll Managed Proxy Settings - START ==="
+        private const val PROXY_SECTION_END = "# === ProxyThemAll Managed Proxy Settings - END ==="
     }
 
     private val proxyUrlBuilder = ProxyUrlBuilder.instance
@@ -156,9 +161,7 @@ class GradleProxyConfigurer {
      * Configures project-level gradle.properties file
      */
     private fun configureProjectGradleProperties(gradlePropertiesFile: File, proxyInfo: ProxyInfo) {
-        val properties = loadProperties(gradlePropertiesFile)
-        setProxyProperties(properties, proxyInfo)
-        saveProperties(properties, gradlePropertiesFile)
+        configureGradlePropertiesFile(gradlePropertiesFile, proxyInfo)
     }
 
     /**
@@ -166,67 +169,18 @@ class GradleProxyConfigurer {
      */
     private fun configureGlobalGradleProperties(proxyInfo: ProxyInfo) {
         val gradlePropertiesFile = getGlobalGradlePropertiesFile()
-        val properties = loadProperties(gradlePropertiesFile)
-        setProxyProperties(properties, proxyInfo)
-        saveProperties(properties, gradlePropertiesFile)
+        configureGradlePropertiesFile(gradlePropertiesFile, proxyInfo)
     }
 
     /**
-     * Sets proxy properties in the Properties object with direct credential support
-     * Uses Gradle's built-in authentication properties when credentials are available,
-     * falls back to IDE's ProxySelector/Authenticator when credentials are not available
+     * Configures gradle.properties file while preserving existing content and structure
      */
-    private fun setProxyProperties(properties: Properties, proxyInfo: ProxyInfo) {
-        // HTTP proxy settings - host and port
-        properties.setProperty(HTTP_PROXY_HOST, proxyInfo.host)
-        properties.setProperty(HTTP_PROXY_PORT, proxyInfo.port.toString())
+    private fun configureGradlePropertiesFile(gradlePropertiesFile: File, proxyInfo: ProxyInfo) {
+        // First, remove any existing ProxyThemAll managed settings
+        removeProxyThemAllManagedSettings(gradlePropertiesFile)
 
-        // HTTPS proxy settings - host and port
-        properties.setProperty(HTTPS_PROXY_HOST, proxyInfo.host)
-        properties.setProperty(HTTPS_PROXY_PORT, proxyInfo.port.toString())
-
-        // Set non-proxy hosts - combine user-defined hosts with essential defaults
-        val nonProxyHosts = buildNonProxyHostsString(proxyInfo.nonProxyHosts)
-        properties.setProperty(HTTP_NON_PROXY_HOSTS, nonProxyHosts)
-        properties.setProperty(HTTPS_NON_PROXY_HOSTS, nonProxyHosts)
-
-        // Direct credential support - use Gradle's built-in authentication properties
-        if (hasCredentials(proxyInfo)) {
-            // Set HTTP authentication properties
-            properties.setProperty(HTTP_PROXY_USER, proxyInfo.username)
-            properties.setProperty(HTTP_PROXY_PASSWORD, proxyInfo.password)
-
-            // Set HTTPS authentication properties
-            properties.setProperty(HTTPS_PROXY_USER, proxyInfo.username)
-            properties.setProperty(HTTPS_PROXY_PASSWORD, proxyInfo.password)
-
-            LOG.info("Gradle proxy configured with direct authentication")
-        } else {
-            // Remove any existing authentication properties to avoid conflicts
-            properties.remove(HTTP_PROXY_USER)
-            properties.remove(HTTP_PROXY_PASSWORD)
-            properties.remove(HTTPS_PROXY_USER)
-            properties.remove(HTTPS_PROXY_PASSWORD)
-
-            // Configure JVM to use system proxy settings and IDE's ProxySelector/Authenticator
-            configureGradleJvmArgs(properties)
-            LOG.info("Gradle proxy configured with IDE ProxySelector/Authenticator fallback")
-        }
-    }
-
-    /**
-     * Builds the non-proxy hosts string for Gradle configuration
-     * Combines user-defined hosts with essential defaults and formats them for Gradle (pipe-separated)
-     */
-    private fun buildNonProxyHostsString(userNonProxyHosts: Set<String>): String {
-        // Essential defaults that should always be excluded from proxy
-        val essentialDefaults = setOf("localhost", "127.*", "[::1]")
-
-        // Combine user-defined hosts with essential defaults
-        val allNonProxyHosts = essentialDefaults + userNonProxyHosts.filter { it.isNotBlank() }
-
-        // Format for Gradle: pipe-separated string
-        return allNonProxyHosts.joinToString("|")
+        // Then append new proxy settings at the end
+        appendProxySettings(gradlePropertiesFile, proxyInfo)
     }
 
     /**
@@ -237,88 +191,135 @@ class GradleProxyConfigurer {
     }
 
     /**
-     * Configures Gradle JVM arguments to use IDE's ProxySelector and Authenticator
-     */
-    private fun configureGradleJvmArgs(properties: Properties) {
-        val existingJvmArgs = properties.getProperty(GRADLE_JVM_ARGS, "")
-
-        // Add system proxy support if not already present
-        if (!existingJvmArgs.contains(PROXY_SELECTOR_ARG)) {
-            val newJvmArgs = if (existingJvmArgs.isBlank()) {
-                PROXY_SELECTOR_ARG
-            } else {
-                "$existingJvmArgs $PROXY_SELECTOR_ARG"
-            }
-            properties.setProperty(GRADLE_JVM_ARGS, newJvmArgs)
-            LOG.info("Added JVM proxy selector argument to Gradle configuration")
-        }
-    }
-
-    /**
-     * Removes proxy properties from a gradle.properties file
+     * Removes proxy properties from a gradle.properties file while preserving structure
      */
     private fun removeProxyPropertiesFromFile(gradlePropertiesFile: File): Boolean {
         if (!gradlePropertiesFile.exists()) {
             return false
         }
 
-        val properties = loadProperties(gradlePropertiesFile)
-        var removedAny = false
+        // Use the new structure-preserving method
+        val originalContent = gradlePropertiesFile.readText()
+        removeProxyThemAllManagedSettings(gradlePropertiesFile)
+        val newContent = gradlePropertiesFile.readText()
 
-        // Remove all proxy-related properties (including new authentication properties)
-        val proxyKeys = listOf(
-            HTTP_PROXY_HOST, HTTP_PROXY_PORT,
-            HTTPS_PROXY_HOST, HTTPS_PROXY_PORT,
-            HTTP_NON_PROXY_HOSTS, HTTPS_NON_PROXY_HOSTS,
-            HTTP_PROXY_USER, HTTP_PROXY_PASSWORD,
-            HTTPS_PROXY_USER, HTTPS_PROXY_PASSWORD,
-            GRADLE_JVM_ARGS // Also remove JVM args when removing proxy
-        )
-
-        for (key in proxyKeys) {
-            if (key == GRADLE_JVM_ARGS) {
-                // For JVM args, only remove the proxy selector argument, not the entire property
-                val existingJvmArgs = properties.getProperty(key, "")
-                if (existingJvmArgs.contains(PROXY_SELECTOR_ARG)) {
-                    val newJvmArgs = existingJvmArgs.replace(PROXY_SELECTOR_ARG, "").trim()
-                    if (newJvmArgs.isBlank()) {
-                        properties.remove(key)
-                    } else {
-                        properties.setProperty(key, newJvmArgs)
-                    }
-                    removedAny = true
-                }
-            } else if (properties.remove(key) != null) {
-                removedAny = true
-            }
-        }
-
-        if (removedAny) {
-            saveProperties(properties, gradlePropertiesFile)
-        }
-
-        return removedAny
+        // Return true if content was actually changed
+        return originalContent != newContent
     }
 
     /**
-     * Loads properties from a file
+     * Removes ProxyThemAll managed settings from the gradle.properties file while preserving structure
      */
-    private fun loadProperties(file: File): Properties {
-        val properties = Properties()
-        if (file.exists()) {
-            file.inputStream().use { input ->
-                properties.load(input)
+    private fun removeProxyThemAllManagedSettings(gradlePropertiesFile: File) {
+        if (!gradlePropertiesFile.exists()) {
+            return
+        }
+
+        val lines = gradlePropertiesFile.readLines().toMutableList()
+        var startIndex = -1
+        var endIndex = -1
+
+        // Find the ProxyThemAll managed section
+        for (i in lines.indices) {
+            val line = lines[i].trim()
+            if (line == PROXY_SECTION_START) {
+                startIndex = i
+            } else if (line == PROXY_SECTION_END && startIndex != -1) {
+                endIndex = i
+                break
             }
         }
-        return properties
+
+        // Remove the managed section if found
+        if (startIndex != -1 && endIndex != -1) {
+            // Remove from end to start to maintain indices
+            for (i in endIndex downTo startIndex) {
+                lines.removeAt(i)
+            }
+
+            // Write the modified content back to the file
+            gradlePropertiesFile.writeText(lines.joinToString("\n"))
+            LOG.info("Removed existing ProxyThemAll managed proxy settings")
+        }
     }
 
     /**
-     * Saves properties to a file
+     * Appends proxy settings to the gradle.properties file with proper commenting
      */
-    private fun saveProperties(properties: Properties, file: File) {
-        file.outputStream().use { output ->
-            properties.store(output, "Gradle proxy configuration managed by ProxyThemAll plugin")
+    private fun appendProxySettings(gradlePropertiesFile: File, proxyInfo: ProxyInfo) {
+        val proxySettings = buildProxySettingsContent(proxyInfo)
+
+        // Ensure the file exists
+        if (!gradlePropertiesFile.exists()) {
+            gradlePropertiesFile.createNewFile()
         }
+
+        // Read existing content
+        val existingContent = if (gradlePropertiesFile.length() > 0) {
+            gradlePropertiesFile.readText()
+        } else {
+            ""
+        }
+
+        // Append proxy settings with proper spacing
+        val newContent = if (existingContent.isBlank()) {
+            proxySettings
+        } else {
+            val separator = if (existingContent.endsWith("\n")) "\n" else "\n\n"
+            existingContent + separator + proxySettings
+        }
+
+        gradlePropertiesFile.writeText(newContent)
+        LOG.info("Appended ProxyThemAll managed proxy settings to gradle.properties")
+    }
+
+    /**
+     * Builds the proxy settings content with proper formatting and comments
+     */
+    private fun buildProxySettingsContent(proxyInfo: ProxyInfo): String {
+        val content = StringBuilder()
+
+        // Add section start marker
+        content.appendLine(PROXY_SECTION_START)
+        content.appendLine("# These settings are automatically managed by ProxyThemAll plugin")
+        content.appendLine("# Manual changes to this section will be overwritten")
+        content.appendLine()
+
+        // Add proxy host and port settings
+        content.appendLine("# HTTP Proxy Configuration")
+        content.appendLine("$HTTP_PROXY_HOST=${proxyInfo.host}")
+        content.appendLine("$HTTP_PROXY_PORT=${proxyInfo.port}")
+        content.appendLine()
+
+        content.appendLine("# HTTPS Proxy Configuration")
+        content.appendLine("$HTTPS_PROXY_HOST=${proxyInfo.host}")
+        content.appendLine("$HTTPS_PROXY_PORT=${proxyInfo.port}")
+        content.appendLine()
+
+        // Builds the non-proxy hosts configuration and formats them for Gradle (pipe-separated)
+        val nonProxyHosts = proxyInfo.nonProxyHosts.joinToString(GRADLE_HOSTS_SEPERATOR)
+
+        // Add non-proxy hosts
+        content.appendLine("# Non-proxy hosts (pipe-separated)")
+        content.appendLine("$HTTP_NON_PROXY_HOSTS=$nonProxyHosts")
+        content.appendLine("$HTTPS_NON_PROXY_HOSTS=$nonProxyHosts")
+        content.appendLine()
+
+        // Add authentication if available
+        if (hasCredentials(proxyInfo)) {
+            content.appendLine("# Proxy Authentication")
+            content.appendLine("$HTTP_PROXY_USER=${proxyInfo.username}")
+            content.appendLine("$HTTP_PROXY_PASSWORD=${proxyInfo.password}")
+            content.appendLine("$HTTPS_PROXY_USER=${proxyInfo.username}")
+            content.appendLine("$HTTPS_PROXY_PASSWORD=${proxyInfo.password}")
+        } else {
+            content.appendLine("# JVM arguments for IDE ProxySelector/Authenticator fallback")
+            content.appendLine("$GRADLE_JVM_ARGS=$PROXY_SELECTOR_ARG")
+        }
+
+        content.appendLine()
+        content.append(PROXY_SECTION_END)
+
+        return content.toString()
     }
 }
