@@ -121,7 +121,7 @@ class ProxyUrlBuilderTest : BasePlatformTestCase() {
             port = 8080,
             username = "user@domain.com",
             password = "p@ss:w0rd",
-            type = "http"
+            nonProxyHosts = emptySet()
         )
         val result = proxyUrlBuilder.buildProxyUrl(proxyInfo)
         assertEquals("http://user%40domain.com:p%40ss%3Aw0rd@proxy.example.com:8080", result)
@@ -131,9 +131,7 @@ class ProxyUrlBuilderTest : BasePlatformTestCase() {
         val proxyInfo = ProxyInfo(
             host = "proxy.example.com",
             port = 8080,
-            username = null,
-            password = null,
-            type = "http"
+            nonProxyHosts = emptySet()
         )
         val result = proxyUrlBuilder.buildProxyUrl(proxyInfo)
         assertEquals("http://proxy.example.com:8080", result)

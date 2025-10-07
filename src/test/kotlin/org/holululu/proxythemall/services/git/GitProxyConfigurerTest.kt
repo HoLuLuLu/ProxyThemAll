@@ -31,7 +31,7 @@ class GitProxyConfigurerTest : BasePlatformTestCase() {
             port = 8080,
             username = "testuser",
             password = "testpass",
-            type = "http"
+            nonProxyHosts = emptySet()
         )
 
         try {
@@ -80,7 +80,7 @@ class GitProxyConfigurerTest : BasePlatformTestCase() {
             port = 8080,
             username = "user",
             password = "pass",
-            type = "http"
+            nonProxyHosts = emptySet()
         )
 
         try {
@@ -116,7 +116,7 @@ class GitProxyConfigurerTest : BasePlatformTestCase() {
             port = 8080,
             username = "user",
             password = "pass",
-            type = "http"
+            nonProxyHosts = emptySet()
         )
 
         val hasCredsResult = method.invoke(gitProxyConfigurer, proxyWithCreds) as Boolean
@@ -126,9 +126,7 @@ class GitProxyConfigurerTest : BasePlatformTestCase() {
         val proxyWithoutCreds = ProxyInfo(
             host = "proxy.example.com",
             port = 8080,
-            username = null,
-            password = null,
-            type = "http"
+            nonProxyHosts = emptySet()
         )
 
         val noCredsResult = method.invoke(gitProxyConfigurer, proxyWithoutCreds) as Boolean
@@ -140,7 +138,7 @@ class GitProxyConfigurerTest : BasePlatformTestCase() {
             port = 8080,
             username = "",
             password = "",
-            type = "http"
+            nonProxyHosts = emptySet()
         )
 
         val emptyCredsResult = method.invoke(gitProxyConfigurer, proxyWithEmptyCreds) as Boolean

@@ -4,7 +4,9 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.net.ProxyConfiguration
 import com.intellij.util.net.ProxyConfiguration.ProxyProtocol
 import com.intellij.util.net.ProxyCredentialStore
+import org.apache.commons.lang3.StringUtils.isBlank
 import org.holululu.proxythemall.models.ProxyInfo
+import java.util.stream.Collectors.toSet
 
 
 /**
@@ -73,6 +75,8 @@ class ProxyInfoExtractor {
                 ProxyProtocol.HTTP -> "http"
             }
 
+            val nonProxyHosts = extractNonProxyHosts(proxyConfiguration)
+
             val credentials = ProxyCredentialStore.getInstance().getCredentials(host, port)
             val username = credentials?.userName
             val password = credentials?.getPasswordAsString()
@@ -82,7 +86,8 @@ class ProxyInfoExtractor {
                 port = port,
                 username = username,
                 password = password,
-                type = type
+                type = type,
+                nonProxyHosts = nonProxyHosts,
             )
         } catch (e: Exception) {
             LOG.warn("Failed to extract static proxy configuration", e)
@@ -90,4 +95,11 @@ class ProxyInfoExtractor {
         }
     }
 
+    private fun extractNonProxyHosts(proxyConfiguration: ProxyConfiguration.StaticProxyConfiguration): Set<String> {
+        if (isBlank(proxyConfiguration.exceptions)) {
+            return emptySet()
+        }
+
+        return proxyConfiguration.exceptions.split(",").stream().collect(toSet())
+    }
 }

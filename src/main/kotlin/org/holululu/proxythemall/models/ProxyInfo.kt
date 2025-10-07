@@ -8,5 +8,6 @@ data class ProxyInfo(
     val port: Int,
     val username: String? = null,
     val password: String? = null,
-    val type: String = "http"
+    val type: String = "http",
+    val nonProxyHosts: Set<String>
 )

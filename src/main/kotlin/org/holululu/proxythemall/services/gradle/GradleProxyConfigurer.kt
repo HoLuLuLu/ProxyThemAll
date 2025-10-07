@@ -185,20 +185,20 @@ class GradleProxyConfigurer {
         properties.setProperty(HTTPS_PROXY_HOST, proxyInfo.host)
         properties.setProperty(HTTPS_PROXY_PORT, proxyInfo.port.toString())
 
-        // Set non-proxy hosts if needed (localhost, 127.0.0.1, etc.)
-        val nonProxyHosts = "localhost|127.*|[::1]"
+        // Set non-proxy hosts - combine user-defined hosts with essential defaults
+        val nonProxyHosts = buildNonProxyHostsString(proxyInfo.nonProxyHosts)
         properties.setProperty(HTTP_NON_PROXY_HOSTS, nonProxyHosts)
         properties.setProperty(HTTPS_NON_PROXY_HOSTS, nonProxyHosts)
 
         // Direct credential support - use Gradle's built-in authentication properties
         if (hasCredentials(proxyInfo)) {
             // Set HTTP authentication properties
-            properties.setProperty(HTTP_PROXY_USER, proxyInfo.username!!)
-            properties.setProperty(HTTP_PROXY_PASSWORD, proxyInfo.password!!)
+            properties.setProperty(HTTP_PROXY_USER, proxyInfo.username)
+            properties.setProperty(HTTP_PROXY_PASSWORD, proxyInfo.password)
 
             // Set HTTPS authentication properties
-            properties.setProperty(HTTPS_PROXY_USER, proxyInfo.username!!)
-            properties.setProperty(HTTPS_PROXY_PASSWORD, proxyInfo.password!!)
+            properties.setProperty(HTTPS_PROXY_USER, proxyInfo.username)
+            properties.setProperty(HTTPS_PROXY_PASSWORD, proxyInfo.password)
 
             LOG.info("Gradle proxy configured with direct authentication")
         } else {
@@ -212,6 +212,21 @@ class GradleProxyConfigurer {
             configureGradleJvmArgs(properties)
             LOG.info("Gradle proxy configured with IDE ProxySelector/Authenticator fallback")
         }
+    }
+
+    /**
+     * Builds the non-proxy hosts string for Gradle configuration
+     * Combines user-defined hosts with essential defaults and formats them for Gradle (pipe-separated)
+     */
+    private fun buildNonProxyHostsString(userNonProxyHosts: Set<String>): String {
+        // Essential defaults that should always be excluded from proxy
+        val essentialDefaults = setOf("localhost", "127.*", "[::1]")
+
+        // Combine user-defined hosts with essential defaults
+        val allNonProxyHosts = essentialDefaults + userNonProxyHosts.filter { it.isNotBlank() }
+
+        // Format for Gradle: pipe-separated string
+        return allNonProxyHosts.joinToString("|")
     }
 
     /**

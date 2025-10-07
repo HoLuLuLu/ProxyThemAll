@@ -33,9 +33,7 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
         val proxyInfo = ProxyInfo(
             host = "proxy.example.com",
             port = 8080,
-            username = null, // Should be null with new approach
-            password = null, // Should be null with new approach
-            type = "http"
+            nonProxyHosts = emptySet()
         )
 
         // Use reflection to access the private method for testing
@@ -77,7 +75,7 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
             port = 8080,
             username = "testuser",
             password = "testpass",
-            type = "http"
+            nonProxyHosts = emptySet()
         )
 
         // Use reflection to access the private method for testing
@@ -129,7 +127,7 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
             port = 8080,
             username = "testuser",
             password = "testpass",
-            type = "http"
+            nonProxyHosts = emptySet()
         )
         val hasCredentials = hasCredentialsMethod.invoke(gradleProxyConfigurer, proxyWithCredentials) as Boolean
         assertTrue("Should have credentials", hasCredentials)
@@ -138,9 +136,7 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
         val proxyWithoutCredentials = ProxyInfo(
             host = "proxy.example.com",
             port = 8080,
-            username = null,
-            password = null,
-            type = "http"
+            nonProxyHosts = emptySet()
         )
         val hasNoCredentials = hasCredentialsMethod.invoke(gradleProxyConfigurer, proxyWithoutCredentials) as Boolean
         assertFalse("Should not have credentials", hasNoCredentials)
@@ -151,7 +147,7 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
             port = 8080,
             username = "",
             password = "  ",
-            type = "http"
+            nonProxyHosts = emptySet()
         )
         val hasBlankCredentials =
             hasCredentialsMethod.invoke(gradleProxyConfigurer, proxyWithBlankCredentials) as Boolean
@@ -168,9 +164,7 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
         val proxyInfo = ProxyInfo(
             host = "proxy.test.com",
             port = 3128,
-            username = null,
-            password = null,
-            type = "http"
+            nonProxyHosts = emptySet()
         )
 
         // Use reflection to access the private method
