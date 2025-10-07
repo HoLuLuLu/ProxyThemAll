@@ -10,6 +10,7 @@ import org.holululu.proxythemall.services.ProxyService
 import org.holululu.proxythemall.services.git.GitProxyService
 import org.holululu.proxythemall.services.gradle.GradleProxyService
 import org.holululu.proxythemall.utils.NotificationMessages
+import org.holululu.proxythemall.utils.NotificationMessages.MESSAGE_SEPARATOR
 import org.holululu.proxythemall.widgets.ProxyStatusBarWidget
 
 /**
@@ -120,11 +121,8 @@ class ProxyController {
             completedCount++
             if (completedCount == 2) {
                 val combinedStatus = buildString {
-                    if (gitStatus.isNotEmpty()) append("Git: $gitStatus")
-                    if (gradleStatus.isNotEmpty()) {
-                        if (isNotEmpty()) append(", ")
-                        append("Gradle: $gradleStatus")
-                    }
+                    if (gitStatus.isNotEmpty()) append(MESSAGE_SEPARATOR).append("Git: $gitStatus")
+                    if (gradleStatus.isNotEmpty()) append(MESSAGE_SEPARATOR).append("Gradle: $gradleStatus")
                 }
 
                 val notification = if (isEnabled) {

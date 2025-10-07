@@ -2,6 +2,7 @@ package org.holululu.proxythemall.services
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.net.ProxyConfiguration
+import com.intellij.util.net.ProxyConfiguration.ProxyProtocol
 import com.intellij.util.net.ProxyCredentialStore
 import org.holululu.proxythemall.models.ProxyInfo
 
@@ -66,12 +67,10 @@ class ProxyInfoExtractor {
                 return null
             }
 
-
             // Determine proxy type from protocol
-            val type = when (proxyConfiguration.protocol.toString().uppercase()) {
-                "SOCKS" -> "socks5"
-                "HTTP" -> "http"
-                else -> "http" // Default to HTTP
+            val type = when (proxyConfiguration.protocol) {
+                ProxyProtocol.SOCKS -> "socks5"
+                ProxyProtocol.HTTP -> "http"
             }
 
             val credentials = ProxyCredentialStore.getInstance().getCredentials(host, port)

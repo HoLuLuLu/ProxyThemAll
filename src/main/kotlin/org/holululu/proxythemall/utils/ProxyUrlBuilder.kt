@@ -38,21 +38,13 @@ class ProxyUrlBuilder {
         password: String? = null,
         type: String = "http"
     ): String {
-        val protocol = determineProtocol(type)
         return if (hasCredentials(username, password)) {
             val encodedUsername = urlEncode(username!!)
             val encodedPassword = urlEncode(password!!)
-            "$protocol://$encodedUsername:$encodedPassword@$host:$port"
+            "$type://$encodedUsername:$encodedPassword@$host:$port"
         } else {
-            "$protocol://$host:$port"
+            "$type://$host:$port"
         }
-    }
-
-    /**
-     * Determines the protocol based on proxy type
-     */
-    private fun determineProtocol(type: String): String {
-        return if (type == "socks5") "socks5" else "http"
     }
 
     /**
