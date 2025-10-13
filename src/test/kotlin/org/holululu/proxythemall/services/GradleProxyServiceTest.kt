@@ -1,7 +1,7 @@
 package org.holululu.proxythemall.services
 
 import org.holululu.proxythemall.TestUtils
-import org.holululu.proxythemall.services.git.GitProxyService
+import org.holululu.proxythemall.services.gradle.GradleProxyService
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -9,12 +9,12 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
- * Basic test for GitProxyService functionality
- * Note: Full testing would require mocking Git command execution
+ * Basic test for GradleProxyService functionality
+ * Note: Full testing would require mocking Gradle configuration
  */
-class GitProxyServiceTest {
+class GradleProxyServiceTest {
 
-    private lateinit var gitProxyService: GitProxyService
+    private lateinit var gradleProxyService: GradleProxyService
 
     @BeforeEach
     fun setUp() {
@@ -23,7 +23,7 @@ class GitProxyServiceTest {
 
         // Create a direct instance instead of using the singleton
         // to avoid IntelliJ Platform initialization issues in pure unit tests
-        gitProxyService = GitProxyService()
+        gradleProxyService = GradleProxyService()
     }
 
     @AfterEach
@@ -33,14 +33,14 @@ class GitProxyServiceTest {
     }
 
     @Test
-    fun testGitProxyServiceInstance() {
+    fun testGradleProxyServiceInstance() {
         // Test that the service can be instantiated
-        assertNotNull(gitProxyService)
+        assertNotNull(gradleProxyService)
     }
 
     @Test
-    fun testConfigureGitProxyDoesNotThrow() {
-        // Test that configuring Git proxy doesn't throw exceptions
+    fun testConfigureGradleProxyDoesNotThrow() {
+        // Test that configuring Gradle proxy doesn't throw exceptions
         // This is a basic smoke test - we can't test with real project in unit tests
         try {
             // In unit test environment, this will likely throw exceptions due to missing IntelliJ context
@@ -53,8 +53,8 @@ class GitProxyServiceTest {
     }
 
     @Test
-    fun testRemoveGitProxySettingsDoesNotThrow() {
-        // Test that removing Git proxy settings doesn't throw exceptions
+    fun testRemoveGradleProxySettingsDoesNotThrow() {
+        // Test that removing Gradle proxy settings doesn't throw exceptions
         // This is a basic smoke test - we can't test with real project in unit tests
         try {
             // In unit test environment, this will likely throw exceptions due to missing IntelliJ context

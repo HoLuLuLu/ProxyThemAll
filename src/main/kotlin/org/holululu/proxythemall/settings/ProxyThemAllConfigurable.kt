@@ -50,6 +50,14 @@ class ProxyThemAllConfigurable : Configurable {
                         .comment("Automatically configure Git to use proxy when proxy is enabled")
                 }
             }
+
+            group("Gradle Integration") {
+                row {
+                    checkBox("Apply proxy settings to Gradle")
+                        .bindSelected(settings::enableGradleProxySupport)
+                        .comment("Enable proxy configuration for Gradle builds")
+                }
+            }
         }
 
         return settingsComponent!!

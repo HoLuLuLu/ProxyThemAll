@@ -10,21 +10,22 @@ import org.holululu.proxythemall.models.NotificationData
  * Utility object containing predefined notification messages
  */
 object NotificationMessages {
+    const val MESSAGE_SEPARATOR = "; "
 
-    fun proxyEnabled(gitStatus: String? = null): NotificationData = NotificationData(
+    fun proxyEnabled(toolsStatus: String? = null): NotificationData = NotificationData(
         title = "Proxy Enabled",
         message = buildString {
             append("You are now using a proxy.")
-            gitStatus?.let { append(System.lineSeparator()).append("Git: $it") }
+            toolsStatus?.let { append(it) }
         },
         type = NotificationType.INFORMATION
     )
 
-    fun proxyDisabled(gitStatus: String? = null): NotificationData = NotificationData(
+    fun proxyDisabled(toolsStatus: String? = null): NotificationData = NotificationData(
         title = "Proxy Disabled",
         message = buildString {
             append("You are now not using any proxy.")
-            gitStatus?.let { append(System.lineSeparator()).append("Git: $it") }
+            toolsStatus?.let { append(it) }
         },
         type = NotificationType.INFORMATION
     )

@@ -14,11 +14,18 @@ import java.io.File
 
 private const val HTTP_PROXY = "http.proxy"
 private const val HTTPS_PROXY = "https.proxy"
+private const val HTTP_NO_PROXY = "http.noproxy"
+private const val HTTPS_NO_PROXY = "https.noproxy"
 private const val GLOBAL_FLAG = "--global"
 private const val UNSET_FLAG = "--unset"
 
+private const val GIT_HOSTS_SEPARATOR = ","
+
 /**
- * Service responsible for configuring Git proxy settings
+ * Service responsible for configuring Git proxy settings using direct credentials
+ *
+ * This configurer uses authenticated proxy URLs when credentials are available,
+ * or falls back to host/port only when no credentials are provided.
  */
 class GitProxyConfigurer {
 
@@ -33,6 +40,7 @@ class GitProxyConfigurer {
 
     /**
      * Sets proxy for Git using extracted proxy information
+     * Uses authenticated proxy URLs when credentials are available
      * Returns a status message for inclusion in notifications
      */
     fun setGitProxy(project: Project?, proxyInfo: ProxyInfo, onComplete: (String) -> Unit) {
@@ -47,13 +55,41 @@ class GitProxyConfigurer {
                     if (projectDir != null) {
                         executeGitCommand(projectDir, listOf("config", HTTP_PROXY, proxyUrl))
                         executeGitCommand(projectDir, listOf("config", HTTPS_PROXY, proxyUrl))
+
+                        // Set no-proxy hosts for project
+                        val noProxyHosts = proxyInfo.nonProxyHosts.joinToString(GIT_HOSTS_SEPARATOR)
+                        if (noProxyHosts.isNotEmpty()) {
+                            executeGitCommand(projectDir, listOf("config", HTTP_NO_PROXY, noProxyHosts))
+                            executeGitCommand(projectDir, listOf("config", HTTPS_NO_PROXY, noProxyHosts))
+                        }
+
+                        val statusMessage = if (hasCredentials(proxyInfo)) {
+                            "configured for project with authentication"
+                        } else {
+                            "configured for project"
+                        }
+                        
                         LOG.info("Git proxy configured for project: $proxyUrl")
-                        onComplete("configured for project")
+                        onComplete(statusMessage)
                     } else {
                         executeGitCommand(null, listOf("config", GLOBAL_FLAG, HTTP_PROXY, proxyUrl))
                         executeGitCommand(null, listOf("config", GLOBAL_FLAG, HTTPS_PROXY, proxyUrl))
+
+                        // Set no-proxy hosts globally
+                        val noProxyHosts = proxyInfo.nonProxyHosts.joinToString(GIT_HOSTS_SEPARATOR)
+                        if (noProxyHosts.isNotEmpty()) {
+                            executeGitCommand(null, listOf("config", GLOBAL_FLAG, HTTP_NO_PROXY, noProxyHosts))
+                            executeGitCommand(null, listOf("config", GLOBAL_FLAG, HTTPS_NO_PROXY, noProxyHosts))
+                        }
+
+                        val statusMessage = if (hasCredentials(proxyInfo)) {
+                            "configured globally with authentication"
+                        } else {
+                            "configured globally"
+                        }
+                        
                         LOG.info("Git proxy configured globally: $proxyUrl")
-                        onComplete("configured globally")
+                        onComplete(statusMessage)
                     }
                 } catch (e: Exception) {
                     LOG.error("Failed to set Git proxy", e)
@@ -81,6 +117,13 @@ class GitProxyConfigurer {
                         try {
                             executeGitCommand(projectDir, listOf("config", UNSET_FLAG, HTTP_PROXY))
                             executeGitCommand(projectDir, listOf("config", UNSET_FLAG, HTTPS_PROXY))
+                            // Also remove no-proxy settings
+                            try {
+                                executeGitCommand(projectDir, listOf("config", UNSET_FLAG, HTTP_NO_PROXY))
+                                executeGitCommand(projectDir, listOf("config", UNSET_FLAG, HTTPS_NO_PROXY))
+                            } catch (e: Exception) {
+                                LOG.debug("Project-level no-proxy settings not found: ${e.message}")
+                            }
                             LOG.info("Project-level Git proxy settings removed")
                             removedAny = true
                             onComplete("proxy removed from project")
@@ -94,6 +137,13 @@ class GitProxyConfigurer {
                         try {
                             executeGitCommand(null, listOf("config", GLOBAL_FLAG, UNSET_FLAG, HTTP_PROXY))
                             executeGitCommand(null, listOf("config", GLOBAL_FLAG, UNSET_FLAG, HTTPS_PROXY))
+                            // Also remove global no-proxy settings
+                            try {
+                                executeGitCommand(null, listOf("config", GLOBAL_FLAG, UNSET_FLAG, HTTP_NO_PROXY))
+                                executeGitCommand(null, listOf("config", GLOBAL_FLAG, UNSET_FLAG, HTTPS_NO_PROXY))
+                            } catch (e: Exception) {
+                                LOG.debug("Global no-proxy settings not found: ${e.message}")
+                            }
                             LOG.info("Global Git proxy settings removed")
                             onComplete("proxy removed globally")
                         } catch (e: Exception) {
@@ -108,6 +158,13 @@ class GitProxyConfigurer {
                 }
             }
         }.queue()
+    }
+
+    /**
+     * Checks if proxy info contains credentials
+     */
+    private fun hasCredentials(proxyInfo: ProxyInfo): Boolean {
+        return !proxyInfo.username.isNullOrBlank() && !proxyInfo.password.isNullOrBlank()
     }
 
     /**
