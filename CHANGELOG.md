@@ -2,7 +2,48 @@
 
 # ProxyThemAll Changelog
 
-## [Unreleased]
+## [0.0.3] - 2025-10-13
+
+### Added
+
+- **Gradle Integration**
+    - Gradle proxy configuration support using JVM system properties and gradle.properties file
+    - Automatic Gradle proxy synchronization with IDE proxy settings
+    - GradleProxyService for managing Gradle-specific proxy configurations
+    - GradleProxyConfigurer for handling gradle.properties file operations
+    - Support for HTTP and HTTPS Gradle proxy configuration
+    - Integration with existing proxy toggle functionality
+
+- **Non-Proxy Hosts Support**
+    - Added support for nonProxyHosts configuration in both Git and Gradle
+    - Enhanced ProxyInfo model to include non-proxy hosts information
+    - Automatic handling of hosts that should bypass proxy settings
+
+### Changed
+
+- **Service Layer Refactoring**
+    - Enhanced ProxyController with improved service integration and multi-service support
+    - Updated ProxyService with better error handling and validation
+    - Refactored ProxyInfoExtractor for simplified credential handling
+    - Improved Git proxy configuration with direct credential support and URL encoding
+    - Removed GitCredentialHelper in favor of direct credential management
+    - Enhanced ProxyUrlBuilder with better URL encoding and validation
+
+- **Configuration Management**
+    - Improved gradle.properties file handling for proxy configuration
+    - Enhanced Git configuration with proper URL encoding for credentials
+    - Better integration between different proxy service types
+
+### Technical Details
+
+- New GradleProxyConfigurer for gradle.properties file management
+- Enhanced ProxyController to support multiple proxy service types
+- Simplified Git proxy configuration without credential helper
+- Added URL encoding for Git proxy credentials to handle special characters
+- Extended test coverage for Gradle and Git functionality with comprehensive test suites
+- Added TestUtils for better test infrastructure
+- Improved notification messages and error handling
+- Enhanced plugin dependencies with Gradle plugin support
 
 ## [0.0.2] - 2025-10-02
 

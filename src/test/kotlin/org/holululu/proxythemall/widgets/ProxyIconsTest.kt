@@ -1,6 +1,8 @@
 package org.holululu.proxythemall.widgets
 
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import javax.swing.Icon
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.jvm.isAccessible
@@ -11,7 +13,7 @@ import kotlin.reflect.jvm.isAccessible
 class ProxyIconsTest {
 
     @Test
-    fun `all proxy icons should have consistent dimensions`() {
+    fun testAllProxyIconsShouldHaveConsistentDimensions() {
         // Given - Get all Icon objects from ProxyIcons using Kotlin reflection
         val proxyIconsClass = ProxyIcons::class
         val iconProperties = proxyIconsClass.memberProperties
@@ -20,7 +22,7 @@ class ProxyIconsTest {
             }
 
         // Ensure we found some icons
-        assert(iconProperties.isNotEmpty()) { "No Icon properties found in ProxyIcons class" }
+        assertTrue(iconProperties.isNotEmpty(), "No Icon properties found in ProxyIcons class")
 
         // When - Extract dimensions from all icons
         val dimensions = iconProperties.map { property ->
@@ -33,12 +35,16 @@ class ProxyIconsTest {
         val firstIconDimensions = dimensions.first()
         dimensions.forEachIndexed { index, (width, height) ->
             val propertyName = iconProperties[index].name
-            assert(width == firstIconDimensions.first) {
+            assertEquals(
+                firstIconDimensions.first,
+                width,
                 "Icon '$propertyName' should have width ${firstIconDimensions.first}, but found: $width"
-            }
-            assert(height == firstIconDimensions.second) {
+            )
+            assertEquals(
+                firstIconDimensions.second,
+                height,
                 "Icon '$propertyName' should have height ${firstIconDimensions.second}, but found: $height"
-            }
+            )
         }
     }
 }

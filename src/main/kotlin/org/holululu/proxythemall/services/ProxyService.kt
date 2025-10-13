@@ -1,17 +1,23 @@
 package org.holululu.proxythemall.services
 
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.net.ProxyConfiguration
 import com.intellij.util.net.ProxySettings
 import org.holululu.proxythemall.models.ProxyState
 
 /**
  * Service responsible for managing proxy configurations and state
+ *
+ * This service coordinates with the modern ProxyConfiguration API and works
+ * alongside GitProxyService and GradleProxyService to provide unified proxy management.
  */
 class ProxyService {
 
     companion object {
         @JvmStatic
         val instance: ProxyService by lazy { ProxyService() }
+
+        private val LOG = Logger.getInstance(ProxyService::class.java)
     }
 
     // Store the last proxy configuration for toggling
@@ -21,12 +27,16 @@ class ProxyService {
      * Determines the current proxy state
      */
     fun getCurrentProxyState(): ProxyState {
-        val proxySettings = ProxySettings.getInstance()
-
-        return when {
-            isProxyEnabled(proxySettings) -> ProxyState.ENABLED
-            isProxyConfigured() -> ProxyState.DISABLED
-            else -> ProxyState.NOT_CONFIGURED
+        return try {
+            val proxySettings = ProxySettings.getInstance()
+            when {
+                isProxyEnabled(proxySettings) -> ProxyState.ENABLED
+                isProxyConfigured() -> ProxyState.DISABLED
+                else -> ProxyState.NOT_CONFIGURED
+            }
+        } catch (e: Exception) {
+            LOG.warn("Failed to determine proxy state", e)
+            ProxyState.NOT_CONFIGURED
         }
     }
 
@@ -35,22 +45,43 @@ class ProxyService {
      * @return the new proxy state after toggling
      */
     fun toggleProxy(): ProxyState {
-        val proxySettings = ProxySettings.getInstance()
-        val currentState = getCurrentProxyState()
+        return try {
+            val proxySettings = ProxySettings.getInstance()
+            val currentState = getCurrentProxyState()
 
-        return when (currentState) {
-            ProxyState.ENABLED -> {
-                storeCurrentProxySettings(proxySettings)
-                disableProxy(proxySettings)
-                ProxyState.DISABLED
+            when (currentState) {
+                ProxyState.ENABLED -> {
+                    storeCurrentProxySettings(proxySettings)
+                    disableProxy(proxySettings)
+                    ProxyState.DISABLED
+                }
+
+                ProxyState.DISABLED -> {
+                    enableProxy(proxySettings)
+                    ProxyState.ENABLED
+                }
+
+                ProxyState.NOT_CONFIGURED -> {
+                    LOG.info("Cannot toggle proxy - no proxy configuration available")
+                    ProxyState.NOT_CONFIGURED
+                }
             }
+        } catch (e: Exception) {
+            LOG.error("Failed to toggle proxy", e)
+            getCurrentProxyState() // Return current state if toggle fails
+        }
+    }
 
-            ProxyState.DISABLED -> {
-                enableProxy(proxySettings)
-                ProxyState.ENABLED
-            }
-
-            ProxyState.NOT_CONFIGURED -> ProxyState.NOT_CONFIGURED
+    /**
+     * Gets the current proxy configuration for use by other services
+     * @return the current ProxyConfiguration or null if not available
+     */
+    fun getCurrentProxyConfiguration(): ProxyConfiguration? {
+        return try {
+            ProxySettings.getInstance().getProxyConfiguration()
+        } catch (e: Exception) {
+            LOG.warn("Failed to get current proxy configuration", e)
+            null
         }
     }
 
@@ -61,8 +92,8 @@ class ProxyService {
         return try {
             val proxyConfiguration = proxySettings.getProxyConfiguration()
             proxyConfiguration !is ProxyConfiguration.DirectProxy
-        } catch (_: Exception) {
-            // If we can't determine proxy state, assume it's disabled
+        } catch (e: Exception) {
+            LOG.debug("Failed to check if proxy is enabled", e)
             false
         }
     }
@@ -72,9 +103,13 @@ class ProxyService {
      */
     private fun storeCurrentProxySettings(proxySettings: ProxySettings) {
         try {
-            lastProxyConfiguration = proxySettings.getProxyConfiguration()
-        } catch (_: Exception) {
-            // Ignore errors when storing settings
+            val currentConfig = proxySettings.getProxyConfiguration()
+            if (currentConfig !is ProxyConfiguration.DirectProxy) {
+                lastProxyConfiguration = currentConfig
+                LOG.debug("Stored proxy configuration for later restoration")
+            }
+        } catch (e: Exception) {
+            LOG.warn("Failed to store current proxy settings", e)
         }
     }
 
@@ -83,12 +118,12 @@ class ProxyService {
      */
     private fun disableProxy(proxySettings: ProxySettings) {
         try {
-            // Create a DirectProxy configuration to disable proxy
             val directProxy = object : ProxyConfiguration.DirectProxy {}
             proxySettings.setProxyConfiguration(directProxy)
-        } catch (_: Exception) {
-            // If modern API fails, we can't disable proxy
-            // This is a limitation of the modern API approach
+            LOG.debug("Proxy disabled successfully")
+        } catch (e: Exception) {
+            LOG.error("Failed to disable proxy", e)
+            throw e
         }
     }
 
@@ -97,12 +132,16 @@ class ProxyService {
      */
     private fun enableProxy(proxySettings: ProxySettings) {
         try {
-            // Restore the last stored proxy configuration
             lastProxyConfiguration?.let { config ->
                 proxySettings.setProxyConfiguration(config)
+                LOG.debug("Proxy enabled successfully")
+            } ?: run {
+                LOG.warn("No stored proxy configuration available to restore")
+                throw IllegalStateException("No proxy configuration available to enable")
             }
-        } catch (_: Exception) {
-            // If we can't restore proxy configuration, do nothing
+        } catch (e: Exception) {
+            LOG.error("Failed to enable proxy", e)
+            throw e
         }
     }
 
@@ -110,8 +149,20 @@ class ProxyService {
      * Checks if a proxy configuration is available
      */
     private fun isProxyConfigured(): Boolean {
-        // Check if we have a stored proxy configuration that's not DirectProxy
-        return lastProxyConfiguration != null &&
-                lastProxyConfiguration !is ProxyConfiguration.DirectProxy
+        return try {
+            // First check if we have a stored configuration
+            val hasStoredConfig = lastProxyConfiguration != null &&
+                    lastProxyConfiguration !is ProxyConfiguration.DirectProxy
+
+            // Also check if there's currently a non-direct proxy configuration
+            val proxySettings = ProxySettings.getInstance()
+            val currentConfig = proxySettings.getProxyConfiguration()
+            val hasCurrentConfig = currentConfig !is ProxyConfiguration.DirectProxy
+
+            hasStoredConfig || hasCurrentConfig
+        } catch (e: Exception) {
+            LOG.debug("Failed to check if proxy is configured", e)
+            false
+        }
     }
 }

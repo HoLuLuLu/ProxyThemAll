@@ -1,34 +1,37 @@
 package org.holululu.proxythemall.widgets
 
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 /**
  * Unit tests for ProxyStatusBarWidgetFactory
  */
 class ProxyStatusBarWidgetFactoryTest {
 
-    @Test
-    fun `factory should have correct ID`() {
-        // Given
-        val factory = ProxyStatusBarWidgetFactory()
+    private lateinit var factory: ProxyStatusBarWidgetFactory
 
+    @BeforeEach
+    fun setUp() {
+        factory = ProxyStatusBarWidgetFactory()
+    }
+
+    @Test
+    fun testFactoryShouldHaveCorrectId() {
         // When
         val id = factory.getId()
 
         // Then
-        assert(id == "ProxyThemAll.StatusBar") { "Factory should have correct ID" }
-        assert(id == ProxyStatusBarWidget.WIDGET_ID) { "Factory ID should match widget ID" }
+        assertEquals("ProxyThemAll.StatusBar", id, "Factory should have correct ID")
+        assertEquals(ProxyStatusBarWidget.WIDGET_ID, id, "Factory ID should match widget ID")
     }
 
     @Test
-    fun `factory should have correct display name`() {
-        // Given
-        val factory = ProxyStatusBarWidgetFactory()
-
+    fun testFactoryShouldHaveCorrectDisplayName() {
         // When
         val displayName = factory.getDisplayName()
 
         // Then
-        assert(displayName == "ProxyThemAll Status") { "Factory should have correct display name" }
+        assertEquals("ProxyThemAll Status", displayName, "Factory should have correct display name")
     }
 }
