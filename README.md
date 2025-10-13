@@ -14,8 +14,11 @@ including automatic Git and Gradle proxy synchronization.
 __Key Features:__
 
 - __Quick proxy toggle__: Switch proxy on/off instantly from the Tools menu or status bar
-- __Git integration__: Automatically synchronizes Git proxy settings with IDE proxy configuration
-- __Gradle integration__: Automatically configures Gradle proxy settings using JVM system properties
+- __Git integration__: Automatically synchronizes Git proxy settings with IDE proxy configuration, including URL
+  encoding for credentials and non-proxy hosts support
+- __Gradle integration (Experimental)__: Automatically configures Gradle proxy settings using JVM system properties and
+  gradle.properties file
+- __Non-proxy hosts support__: Automatically handles hosts that should bypass proxy settings for both Git and Gradle
 - __Visual status indicator__: See your current proxy state at a glance in the status bar
 - __Smart memory__: Remembers your proxy settings when you turn them off, so you can easily turn them back on
 - __Helpful notifications__: Get notified when proxy state changes or when configuration is needed
@@ -27,6 +30,7 @@ __Perfect for developers who:__
 - Need to quickly test applications with and without proxy
 - Want Git and Gradle operations to work seamlessly with their proxy setup
 - Want to avoid manually configuring proxy settings in multiple places (IDE, Git, Gradle)
+- Have complex proxy setups with non-proxy hosts or special characters in credentials
 - Prefer visual indicators and one-click solutions
 
 The plugin adds a simple toggle action to your Tools menu and an optional status bar widget, making proxy management
@@ -72,7 +76,11 @@ src/main/kotlin/org/holululu/proxythemall/
     └── ProxyStatusBarWidgetFactory.kt # Widget factory for IDE integration
 ```
 
-The project also includes comprehensive test coverage in `src/test/kotlin/` mirroring the main source structure.
+The project also includes comprehensive test coverage in `src/test/kotlin/` with:
+
+- `TestUtils.kt` - Common test utilities and helper functions
+- Test classes mirroring the main source structure for all core components
+- Dedicated test suites for Git and Gradle proxy configuration functionality
 
 ## Installation
 

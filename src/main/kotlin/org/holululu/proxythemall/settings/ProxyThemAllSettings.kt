@@ -33,7 +33,7 @@ class ProxyThemAllSettings : PersistentStateComponent<ProxyThemAllSettings> {
     var applyProxyToGit: Boolean = true
 
     // Enable Gradle proxy support
-    var enableGradleProxySupport: Boolean = true
+    var enableGradleProxySupport: Boolean = false
 
     override fun getState(): ProxyThemAllSettings {
         return this
