@@ -54,8 +54,8 @@ class ProxyThemAllConfigurable : Configurable {
             group("Gradle Integration") {
                 row {
                     checkBox("Apply proxy settings to Gradle")
-                        .bindSelected(settings::applyProxyToGradle)
-                        .comment("Automatically configure Gradle to use proxy when proxy is enabled")
+                        .bindSelected(settings::enableGradleProxySupport)
+                        .comment("Enable proxy configuration for Gradle builds")
                 }
             }
         }

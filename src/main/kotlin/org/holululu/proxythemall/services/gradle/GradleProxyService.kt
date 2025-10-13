@@ -31,7 +31,7 @@ class GradleProxyService {
      * Configures Gradle proxy settings based on current IDE proxy configuration
      */
     fun configureGradleProxy(project: Project?, onComplete: (String) -> Unit) {
-        if (!settings.applyProxyToGradle) {
+        if (!settings.enableGradleProxySupport) {
             onComplete("Gradle proxy disabled in settings")
             return
         }
@@ -64,7 +64,7 @@ class GradleProxyService {
      * Removes Gradle proxy settings
      */
     fun removeGradleProxySettings(project: Project?, onComplete: (String) -> Unit) {
-        if (!settings.applyProxyToGradle) {
+        if (!settings.enableGradleProxySupport) {
             onComplete("Gradle proxy disabled in settings")
             return
         }

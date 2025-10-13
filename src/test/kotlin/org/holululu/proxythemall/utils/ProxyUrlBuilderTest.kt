@@ -1,172 +1,264 @@
 package org.holululu.proxythemall.utils
 
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import org.holululu.proxythemall.models.ProxyInfo
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 /**
- * Test suite for ProxyUrlBuilder with URL encoding functionality
+ * Unit tests for ProxyUrlBuilder
  */
-class ProxyUrlBuilderTest : BasePlatformTestCase() {
+class ProxyUrlBuilderTest {
 
-    private val proxyUrlBuilder = ProxyUrlBuilder.instance
+    private lateinit var builder: ProxyUrlBuilder
 
+    @BeforeEach
+    fun setUp() {
+        builder = ProxyUrlBuilder.instance
+    }
+
+    @Test
     fun testBuildProxyUrlWithoutCredentials() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080
-        )
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, null, null, type)
+
+        // Then
         assertEquals("http://proxy.example.com:8080", result)
     }
 
+    @Test
     fun testBuildProxyUrlWithSimpleCredentials() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "user",
-            password = "pass"
-        )
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+        val username = "user"
+        val password = "pass"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
         assertEquals("http://user:pass@proxy.example.com:8080", result)
     }
 
+    @Test
     fun testBuildProxyUrlWithSpecialCharactersInCredentials() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "user@domain.com",
-            password = "p@ss:w0rd"
-        )
-        // @ should be encoded as %40, : should be encoded as %3A
-        assertEquals("http://user%40domain.com:p%40ss%3Aw0rd@proxy.example.com:8080", result)
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+        val username = "user@domain"
+        val password = "p@ss:word"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
+        assertEquals("http://user%40domain:p%40ss%3Aword@proxy.example.com:8080", result)
     }
 
-    fun testBuildProxyUrlWithPercentInCredentials() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "user%name",
-            password = "pass%word"
-        )
-        // % should be encoded as %25
-        assertEquals("http://user%25name:pass%25word@proxy.example.com:8080", result)
-    }
-
-    fun testBuildProxyUrlWithSpacesInCredentials() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "user name",
-            password = "pass word"
-        )
-        // Space should be encoded as %20
-        assertEquals("http://user+name:pass+word@proxy.example.com:8080", result)
-    }
-
-    fun testBuildProxyUrlWithUnicodeInCredentials() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "üser",
-            password = "pässwörd"
-        )
-        // Unicode characters should be properly encoded
-        assertEquals("http://%C3%BCser:p%C3%A4ssw%C3%B6rd@proxy.example.com:8080", result)
-    }
-
-    fun testBuildProxyUrlWithEmptyCredentials() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "",
-            password = ""
-        )
-        // Empty credentials should be treated as no credentials
-        assertEquals("http://proxy.example.com:8080", result)
-    }
-
-    fun testBuildProxyUrlWithNullCredentials() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
-            username = null,
-            password = null
-        )
-        assertEquals("http://proxy.example.com:8080", result)
-    }
-
+    @Test
     fun testBuildProxyUrlWithSocks5Type() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 1080,
-            username = "user",
-            password = "pass",
-            type = "socks5"
-        )
+        // Given
+        val host = "proxy.example.com"
+        val port = 1080
+        val type = "socks5"
+        val username = "user"
+        val password = "pass"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
         assertEquals("socks5://user:pass@proxy.example.com:1080", result)
     }
 
-    fun testBuildProxyUrlWithSocks5TypeAndSpecialCharacters() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 1080,
-            username = "user@domain",
-            password = "p@ss:w0rd",
-            type = "socks5"
-        )
-        assertEquals("socks5://user%40domain:p%40ss%3Aw0rd@proxy.example.com:1080", result)
-    }
-
+    @Test
     fun testBuildProxyUrlWithProxyInfoObject() {
+        // Given
         val proxyInfo = ProxyInfo(
             host = "proxy.example.com",
             port = 8080,
-            username = "user@domain.com",
-            password = "p@ss:w0rd",
-            nonProxyHosts = emptySet()
-        )
-        val result = proxyUrlBuilder.buildProxyUrl(proxyInfo)
-        assertEquals("http://user%40domain.com:p%40ss%3Aw0rd@proxy.example.com:8080", result)
-    }
-
-    fun testBuildProxyUrlWithProxyInfoObjectWithoutCredentials() {
-        val proxyInfo = ProxyInfo(
-            host = "proxy.example.com",
-            port = 8080,
-            nonProxyHosts = emptySet()
-        )
-        val result = proxyUrlBuilder.buildProxyUrl(proxyInfo)
-        assertEquals("http://proxy.example.com:8080", result)
-    }
-
-    fun testBuildProxyUrlWithComplexSpecialCharacters() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "user+name@domain.com",
-            password = "p@ss#w0rd&more"
-        )
-        // Test various special characters that need encoding
-        assertEquals("http://user%2Bname%40domain.com:p%40ss%23w0rd%26more@proxy.example.com:8080", result)
-    }
-
-    fun testBuildProxyUrlWithOnlyUsernameProvided() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
+            type = "http",
             username = "user",
-            password = null
+            password = "pass",
+            nonProxyHosts = emptySet()
         )
-        // Should not include credentials if password is missing
+
+        // When
+        val result = builder.buildProxyUrl(proxyInfo)
+
+        // Then
+        assertEquals("http://user:pass@proxy.example.com:8080", result)
+    }
+
+    @Test
+    fun testBuildProxyUrlWithProxyInfoObjectWithoutCredentials() {
+        // Given
+        val proxyInfo = ProxyInfo(
+            host = "proxy.example.com",
+            port = 8080,
+            type = "http",
+            username = null,
+            password = null,
+            nonProxyHosts = emptySet()
+        )
+
+        // When
+        val result = builder.buildProxyUrl(proxyInfo)
+
+        // Then
         assertEquals("http://proxy.example.com:8080", result)
     }
 
-    fun testBuildProxyUrlWithOnlyPasswordProvided() {
-        val result = proxyUrlBuilder.buildProxyUrl(
-            host = "proxy.example.com",
-            port = 8080,
-            username = null,
-            password = "pass"
-        )
-        // Should not include credentials if username is missing
+    @Test
+    fun testBuildProxyUrlWithNullCredentials() {
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, null, null, type)
+
+        // Then
         assertEquals("http://proxy.example.com:8080", result)
+    }
+
+    @Test
+    fun testBuildProxyUrlWithEmptyCredentials() {
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+        val username = ""
+        val password = ""
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
+        assertEquals("http://proxy.example.com:8080", result)
+    }
+
+    @Test
+    fun testBuildProxyUrlWithOnlyUsernameProvided() {
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+        val username = "user"
+        val password = null
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
+        assertEquals("http://proxy.example.com:8080", result)
+    }
+
+    @Test
+    fun testBuildProxyUrlWithOnlyPasswordProvided() {
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+        val username = null
+        val password = "pass"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
+        assertEquals("http://proxy.example.com:8080", result)
+    }
+
+    @Test
+    fun testBuildProxyUrlWithPercentInCredentials() {
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+        val username = "user%name"
+        val password = "pass%word"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
+        assertEquals("http://user%25name:pass%25word@proxy.example.com:8080", result)
+    }
+
+    @Test
+    fun testBuildProxyUrlWithSpacesInCredentials() {
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+        val username = "user name"
+        val password = "pass word"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
+        assertEquals("http://user+name:pass+word@proxy.example.com:8080", result)
+    }
+
+    @Test
+    fun testBuildProxyUrlWithUnicodeInCredentials() {
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+        val username = "usér"
+        val password = "pássword"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
+        assertEquals("http://us%C3%A9r:p%C3%A1ssword@proxy.example.com:8080", result)
+    }
+
+    @Test
+    fun testBuildProxyUrlWithComplexSpecialCharacters() {
+        // Given
+        val host = "proxy.example.com"
+        val port = 8080
+        val type = "http"
+        val username = "user!@#$%^&*()"
+        val password = "pass!@#$%^&*()"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
+        assertEquals(
+            "http://user%21%40%23%24%25%5E%26*%28%29:pass%21%40%23%24%25%5E%26*%28%29@proxy.example.com:8080",
+            result
+        )
+    }
+
+    @Test
+    fun testBuildProxyUrlWithSocks5TypeAndSpecialCharacters() {
+        // Given
+        val host = "proxy.example.com"
+        val port = 1080
+        val type = "socks5"
+        val username = "user@domain"
+        val password = "p@ss:word"
+
+        // When
+        val result = builder.buildProxyUrl(host, port, username, password, type)
+
+        // Then
+        assertEquals("socks5://user%40domain:p%40ss%3Aword@proxy.example.com:1080", result)
     }
 }

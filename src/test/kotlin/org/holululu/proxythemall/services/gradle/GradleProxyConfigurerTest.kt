@@ -1,31 +1,35 @@
 package org.holululu.proxythemall.services.gradle
 
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import org.holululu.proxythemall.models.ProxyInfo
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
  * Test for GradleProxyConfigurer functionality with file-based proxy configuration
  */
-class GradleProxyConfigurerTest : BasePlatformTestCase() {
+class GradleProxyConfigurerTest {
 
     private lateinit var gradleProxyConfigurer: GradleProxyConfigurer
     private var tempPropertiesFile: File? = null
 
-    override fun setUp() {
-        super.setUp()
+    @BeforeEach
+    fun setUp() {
         gradleProxyConfigurer = GradleProxyConfigurer.instance
     }
 
-    override fun tearDown() {
+    @AfterEach
+    fun tearDown() {
         tempPropertiesFile?.let { file ->
             if (file.exists()) {
                 file.delete()
             }
         }
-        super.tearDown()
     }
 
+    @Test
     fun testHasCredentials() {
         // Test the hasCredentials helper method
         val hasCredentialsMethod = GradleProxyConfigurer::class.java.getDeclaredMethod(
@@ -43,7 +47,7 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
             nonProxyHosts = emptySet()
         )
         val hasCredentials = hasCredentialsMethod.invoke(gradleProxyConfigurer, proxyWithCredentials) as Boolean
-        assertTrue("Should have credentials", hasCredentials)
+        assertTrue(hasCredentials, "Should have credentials")
 
         // Test without credentials
         val proxyWithoutCredentials = ProxyInfo(
@@ -52,7 +56,7 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
             nonProxyHosts = emptySet()
         )
         val hasNoCredentials = hasCredentialsMethod.invoke(gradleProxyConfigurer, proxyWithoutCredentials) as Boolean
-        assertFalse("Should not have credentials", hasNoCredentials)
+        assertFalse(hasNoCredentials, "Should not have credentials")
 
         // Test with blank credentials
         val proxyWithBlankCredentials = ProxyInfo(
@@ -64,9 +68,10 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
         )
         val hasBlankCredentials =
             hasCredentialsMethod.invoke(gradleProxyConfigurer, proxyWithBlankCredentials) as Boolean
-        assertFalse("Should not have credentials when blank", hasBlankCredentials)
+        assertFalse(hasBlankCredentials, "Should not have credentials when blank")
     }
 
+    @Test
     fun testBuildProxySettingsContentWithoutCredentials() {
         // Test that proxy settings content is built correctly without credentials
         val proxyInfo = ProxyInfo(
@@ -85,36 +90,37 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
 
         // Verify section markers are present
         assertTrue(
-            "Should contain start marker",
-            content.contains("=== ProxyThemAll Managed Proxy Settings - START ===")
+            content.contains("=== ProxyThemAll Managed Proxy Settings - START ==="),
+            "Should contain start marker"
         )
-        assertTrue("Should contain end marker", content.contains("=== ProxyThemAll Managed Proxy Settings - END ==="))
+        assertTrue(content.contains("=== ProxyThemAll Managed Proxy Settings - END ==="), "Should contain end marker")
 
         // Verify host and port are set
-        assertTrue("Should contain HTTP proxy host", content.contains("systemProp.http.proxyHost=proxy.example.com"))
-        assertTrue("Should contain HTTP proxy port", content.contains("systemProp.http.proxyPort=8080"))
-        assertTrue("Should contain HTTPS proxy host", content.contains("systemProp.https.proxyHost=proxy.example.com"))
-        assertTrue("Should contain HTTPS proxy port", content.contains("systemProp.https.proxyPort=8080"))
+        assertTrue(content.contains("systemProp.http.proxyHost=proxy.example.com"), "Should contain HTTP proxy host")
+        assertTrue(content.contains("systemProp.http.proxyPort=8080"), "Should contain HTTP proxy port")
+        assertTrue(content.contains("systemProp.https.proxyHost=proxy.example.com"), "Should contain HTTPS proxy host")
+        assertTrue(content.contains("systemProp.https.proxyPort=8080"), "Should contain HTTPS proxy port")
 
         // Verify non-proxy hosts are set (including custom ones)
-        assertTrue("Should contain non-proxy hosts", content.contains("internal.company.com"))
-        assertTrue("Should contain localhost", content.contains("localhost"))
-        assertTrue("Should contain 127.*", content.contains("127.*"))
-        assertTrue("Should contain [::1]", content.contains("[::1]"))
+        assertTrue(content.contains("internal.company.com"), "Should contain non-proxy hosts")
+        assertTrue(content.contains("localhost"), "Should contain localhost")
+        assertTrue(content.contains("127.*"), "Should contain 127.*")
+        assertTrue(content.contains("[::1]"), "Should contain [::1]")
 
         // Verify JVM args are configured for proxy selector (fallback approach)
         assertTrue(
-            "Should contain JVM args for proxy selector",
-            content.contains("org.gradle.jvmargs=-Djava.net.useSystemProxies=true")
+            content.contains("org.gradle.jvmargs=-Djava.net.useSystemProxies=true"),
+            "Should contain JVM args for proxy selector"
         )
 
         // Verify credentials are NOT set (fallback approach)
-        assertFalse("Should not contain HTTP proxy user", content.contains("systemProp.http.proxyUser="))
-        assertFalse("Should not contain HTTP proxy password", content.contains("systemProp.http.proxyPassword="))
-        assertFalse("Should not contain HTTPS proxy user", content.contains("systemProp.https.proxyUser="))
-        assertFalse("Should not contain HTTPS proxy password", content.contains("systemProp.https.proxyPassword="))
+        assertFalse(content.contains("systemProp.http.proxyUser="), "Should not contain HTTP proxy user")
+        assertFalse(content.contains("systemProp.http.proxyPassword="), "Should not contain HTTP proxy password")
+        assertFalse(content.contains("systemProp.https.proxyUser="), "Should not contain HTTPS proxy user")
+        assertFalse(content.contains("systemProp.https.proxyPassword="), "Should not contain HTTPS proxy password")
     }
 
+    @Test
     fun testBuildProxySettingsContentWithCredentials() {
         // Test that proxy settings content is built correctly WITH credentials
         val proxyInfo = ProxyInfo(
@@ -135,35 +141,36 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
 
         // Verify section markers are present
         assertTrue(
-            "Should contain start marker",
-            content.contains("=== ProxyThemAll Managed Proxy Settings - START ===")
+            content.contains("=== ProxyThemAll Managed Proxy Settings - START ==="),
+            "Should contain start marker"
         )
-        assertTrue("Should contain end marker", content.contains("=== ProxyThemAll Managed Proxy Settings - END ==="))
+        assertTrue(content.contains("=== ProxyThemAll Managed Proxy Settings - END ==="), "Should contain end marker")
 
         // Verify host and port are set
-        assertTrue("Should contain HTTP proxy host", content.contains("systemProp.http.proxyHost=proxy.example.com"))
-        assertTrue("Should contain HTTP proxy port", content.contains("systemProp.http.proxyPort=8080"))
-        assertTrue("Should contain HTTPS proxy host", content.contains("systemProp.https.proxyHost=proxy.example.com"))
-        assertTrue("Should contain HTTPS proxy port", content.contains("systemProp.https.proxyPort=8080"))
+        assertTrue(content.contains("systemProp.http.proxyHost=proxy.example.com"), "Should contain HTTP proxy host")
+        assertTrue(content.contains("systemProp.http.proxyPort=8080"), "Should contain HTTP proxy port")
+        assertTrue(content.contains("systemProp.https.proxyHost=proxy.example.com"), "Should contain HTTPS proxy host")
+        assertTrue(content.contains("systemProp.https.proxyPort=8080"), "Should contain HTTPS proxy port")
 
         // Verify non-proxy hosts are set (default ones)
-        assertTrue("Should contain localhost", content.contains("localhost"))
-        assertTrue("Should contain 127.*", content.contains("127.*"))
-        assertTrue("Should contain [::1]", content.contains("[::1]"))
+        assertTrue(content.contains("localhost"), "Should contain localhost")
+        assertTrue(content.contains("127.*"), "Should contain 127.*")
+        assertTrue(content.contains("[::1]"), "Should contain [::1]")
 
         // Verify credentials ARE set (direct credential support)
-        assertTrue("Should contain HTTP proxy user", content.contains("systemProp.http.proxyUser=testuser"))
-        assertTrue("Should contain HTTP proxy password", content.contains("systemProp.http.proxyPassword=testpass"))
-        assertTrue("Should contain HTTPS proxy user", content.contains("systemProp.https.proxyUser=testuser"))
-        assertTrue("Should contain HTTPS proxy password", content.contains("systemProp.https.proxyPassword=testpass"))
+        assertTrue(content.contains("systemProp.http.proxyUser=testuser"), "Should contain HTTP proxy user")
+        assertTrue(content.contains("systemProp.http.proxyPassword=testpass"), "Should contain HTTP proxy password")
+        assertTrue(content.contains("systemProp.https.proxyUser=testuser"), "Should contain HTTPS proxy user")
+        assertTrue(content.contains("systemProp.https.proxyPassword=testpass"), "Should contain HTTPS proxy password")
 
         // Verify JVM args are NOT set when using direct credentials
         assertFalse(
-            "Should not contain JVM args when using direct credentials",
-            content.contains("org.gradle.jvmargs=-Djava.net.useSystemProxies=true")
+            content.contains("org.gradle.jvmargs=-Djava.net.useSystemProxies=true"),
+            "Should not contain JVM args when using direct credentials"
         )
     }
 
+    @Test
     fun testRemoveProxyProperties() {
         // Test that proxy properties are properly removed using the new structure-preserving approach
         
@@ -215,37 +222,38 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
         method.isAccessible = true
         val result = method.invoke(gradleProxyConfigurer, tempPropertiesFile!!) as Boolean
 
-        assertTrue("Should have removed properties", result)
+        assertTrue(result, "Should have removed properties")
 
         // Read the file content back and verify the ProxyThemAll section was removed
         val finalContent = tempPropertiesFile!!.readText()
 
         // Verify the ProxyThemAll managed section is completely removed
         assertFalse(
-            "Should not contain ProxyThemAll start marker",
-            finalContent.contains("=== ProxyThemAll Managed Proxy Settings - START ===")
+            finalContent.contains("=== ProxyThemAll Managed Proxy Settings - START ==="),
+            "Should not contain ProxyThemAll start marker"
         )
         assertFalse(
-            "Should not contain ProxyThemAll end marker",
-            finalContent.contains("=== ProxyThemAll Managed Proxy Settings - END ===")
+            finalContent.contains("=== ProxyThemAll Managed Proxy Settings - END ==="),
+            "Should not contain ProxyThemAll end marker"
         )
         assertFalse(
-            "Should not contain proxy host",
-            finalContent.contains("systemProp.http.proxyHost=proxy.example.com")
+            finalContent.contains("systemProp.http.proxyHost=proxy.example.com"),
+            "Should not contain proxy host"
         )
         assertFalse(
-            "Should not contain proxy authentication",
-            finalContent.contains("systemProp.http.proxyUser=testuser")
+            finalContent.contains("systemProp.http.proxyUser=testuser"),
+            "Should not contain proxy authentication"
         )
 
         // Verify existing content is preserved
-        assertTrue("Should preserve existing comment", finalContent.contains("# Some existing comment"))
-        assertTrue("Should preserve existing property", finalContent.contains("pluginGroup=org.example"))
-        assertTrue("Should preserve existing property", finalContent.contains("pluginVersion=1.0.0"))
-        assertTrue("Should preserve existing property", finalContent.contains("org.gradle.caching=true"))
-        assertTrue("Should preserve other comments", finalContent.contains("# More existing content"))
+        assertTrue(finalContent.contains("# Some existing comment"), "Should preserve existing comment")
+        assertTrue(finalContent.contains("pluginGroup=org.example"), "Should preserve existing property")
+        assertTrue(finalContent.contains("pluginVersion=1.0.0"), "Should preserve existing property")
+        assertTrue(finalContent.contains("org.gradle.caching=true"), "Should preserve existing property")
+        assertTrue(finalContent.contains("# More existing content"), "Should preserve other comments")
     }
 
+    @Test
     fun testPreserveFileStructureAndComments() {
         // Test that the new implementation preserves existing file structure and comments
 
@@ -310,70 +318,70 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
 
         // Verify all original content is preserved
         assertTrue(
-            "Should preserve IntelliJ Platform comment",
-            contentWithProxy.contains("# IntelliJ Platform Artifacts Repositories")
+            contentWithProxy.contains("# IntelliJ Platform Artifacts Repositories"),
+            "Should preserve IntelliJ Platform comment"
         )
         assertTrue(
-            "Should preserve plugin group",
-            contentWithProxy.contains("pluginGroup=org.holululu.proxythemall")
+            contentWithProxy.contains("pluginGroup=org.holululu.proxythemall"),
+            "Should preserve plugin group"
         )
         assertTrue(
-            "Should preserve plugin name",
-            contentWithProxy.contains("pluginName = ProxyThemAll")
+            contentWithProxy.contains("pluginName = ProxyThemAll"),
+            "Should preserve plugin name"
         )
         assertTrue(
-            "Should preserve SemVer comment",
-            contentWithProxy.contains("# SemVer format -> https://semver.org")
+            contentWithProxy.contains("# SemVer format -> https://semver.org"),
+            "Should preserve SemVer comment"
         )
         assertTrue(
-            "Should preserve version",
-            contentWithProxy.contains("pluginVersion=0.0.3")
+            contentWithProxy.contains("pluginVersion=0.0.3"),
+            "Should preserve version"
         )
         assertTrue(
-            "Should preserve build number comment",
-            contentWithProxy.contains("# Supported build number ranges")
+            contentWithProxy.contains("# Supported build number ranges"),
+            "Should preserve build number comment"
         )
         assertTrue(
-            "Should preserve platform properties",
-            contentWithProxy.contains("platformType = IC")
+            contentWithProxy.contains("platformType = IC"),
+            "Should preserve platform properties"
         )
         assertTrue(
-            "Should preserve example comments",
-            contentWithProxy.contains("# Example: platformPlugins")
+            contentWithProxy.contains("# Example: platformPlugins"),
+            "Should preserve example comments"
         )
         assertTrue(
-            "Should preserve gradle version",
-            contentWithProxy.contains("gradleVersion = 9.0.0")
+            contentWithProxy.contains("gradleVersion = 9.0.0"),
+            "Should preserve gradle version"
         )
         assertTrue(
-            "Should preserve configuration cache",
-            contentWithProxy.contains("org.gradle.configuration-cache = true")
+            contentWithProxy.contains("org.gradle.configuration-cache = true"),
+            "Should preserve configuration cache"
         )
         assertTrue(
-            "Should preserve build cache",
-            contentWithProxy.contains("org.gradle.caching = true")
+            contentWithProxy.contains("org.gradle.caching = true"),
+            "Should preserve build cache"
         )
 
         // Verify proxy settings were added with proper structure
         assertTrue(
-            "Should contain ProxyThemAll start marker",
-            contentWithProxy.contains("# === ProxyThemAll Managed Proxy Settings - START ===")
+            contentWithProxy.contains("# === ProxyThemAll Managed Proxy Settings - START ==="),
+            "Should contain ProxyThemAll start marker"
         )
         assertTrue(
-            "Should contain ProxyThemAll end marker",
-            contentWithProxy.contains("# === ProxyThemAll Managed Proxy Settings - END ===")
+            contentWithProxy.contains("# === ProxyThemAll Managed Proxy Settings - END ==="),
+            "Should contain ProxyThemAll end marker"
         )
         assertTrue(
-            "Should contain proxy host",
-            contentWithProxy.contains("systemProp.http.proxyHost=proxy.example.com")
+            contentWithProxy.contains("systemProp.http.proxyHost=proxy.example.com"),
+            "Should contain proxy host"
         )
         assertTrue(
-            "Should contain proxy authentication",
-            contentWithProxy.contains("systemProp.http.proxyUser=testuser")
+            contentWithProxy.contains("systemProp.http.proxyUser=testuser"),
+            "Should contain proxy authentication"
         )
         assertTrue(
-            "Should contain custom non-proxy hosts",
-            contentWithProxy.contains("localhost|127.*|[::1]|internal.company.com")
+            contentWithProxy.contains("localhost|127.*|[::1]|internal.company.com"),
+            "Should contain custom non-proxy hosts"
         )
 
         // Now remove proxy settings and verify original structure is restored
@@ -384,41 +392,41 @@ class GradleProxyConfigurerTest : BasePlatformTestCase() {
         removeMethod.isAccessible = true
         val removed = removeMethod.invoke(gradleProxyConfigurer, tempPropertiesFile!!) as Boolean
 
-        assertTrue("Should have removed proxy settings", removed)
+        assertTrue(removed, "Should have removed proxy settings")
 
         val finalContent = tempPropertiesFile!!.readText()
 
         // Verify proxy settings are completely removed
         assertFalse(
-            "Should not contain ProxyThemAll markers",
-            finalContent.contains("=== ProxyThemAll Managed Proxy Settings")
+            finalContent.contains("=== ProxyThemAll Managed Proxy Settings"),
+            "Should not contain ProxyThemAll markers"
         )
         assertFalse(
-            "Should not contain proxy settings",
-            finalContent.contains("systemProp.http.proxyHost")
+            finalContent.contains("systemProp.http.proxyHost"),
+            "Should not contain proxy settings"
         )
 
         // Verify all original content is still preserved
         assertTrue(
-            "Should still preserve IntelliJ Platform comment",
-            finalContent.contains("# IntelliJ Platform Artifacts Repositories")
+            finalContent.contains("# IntelliJ Platform Artifacts Repositories"),
+            "Should still preserve IntelliJ Platform comment"
         )
         assertTrue(
-            "Should still preserve plugin group",
-            finalContent.contains("pluginGroup=org.holululu.proxythemall")
+            finalContent.contains("pluginGroup=org.holululu.proxythemall"),
+            "Should still preserve plugin group"
         )
         assertTrue(
-            "Should still preserve plugin name",
-            finalContent.contains("pluginName = ProxyThemAll")
+            finalContent.contains("pluginName = ProxyThemAll"),
+            "Should still preserve plugin name"
         )
         assertTrue(
-            "Should still preserve all comments and properties",
-            finalContent.contains("org.gradle.caching = true")
+            finalContent.contains("org.gradle.caching = true"),
+            "Should still preserve all comments and properties"
         )
 
         // Verify the content is essentially the same as original (allowing for minor whitespace differences)
         val normalizedOriginal = originalContent.replace("\\s+".toRegex(), " ").trim()
         val normalizedFinal = finalContent.replace("\\s+".toRegex(), " ").trim()
-        assertEquals("Content should be restored to original state", normalizedOriginal, normalizedFinal)
+        assertEquals(normalizedOriginal, normalizedFinal, "Content should be restored to original state")
     }
 }
