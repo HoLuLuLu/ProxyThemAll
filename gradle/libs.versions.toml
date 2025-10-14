@@ -1,6 +1,6 @@
 [versions]
 # libraries
-junit = "5.10.0"
+junit = "6.0.0"
 mockk = "1.14.6"
 opentest4j = "1.3.0"
 
