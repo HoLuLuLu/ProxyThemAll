@@ -9,7 +9,7 @@
 
 <!-- Plugin description -->
 __ProxyThemAll__ is an IntelliJ IDEA plugin that makes it easy to toggle proxy settings on and off with just one click,
-including automatic Git and Gradle proxy synchronization.
+including automatic Git and Gradle proxy synchronization with multi-project support and intelligent state management.
 
 __Key Features:__
 
@@ -18,6 +18,7 @@ __Key Features:__
   encoding for credentials and non-proxy hosts support
 - __Gradle integration (Experimental)__: Automatically configures Gradle proxy settings using JVM system properties and
   gradle.properties file
+- __Multi-project support__: Proxy configuration changes apply to all open projects simultaneously
 - __Non-proxy hosts support__: Automatically handles hosts that should bypass proxy settings for both Git and Gradle
 - __Visual status indicator__: See your current proxy state at a glance in the status bar
 - __Smart memory__: Remembers your proxy settings when you turn them off, so you can easily turn them back on
@@ -28,9 +29,10 @@ __Perfect for developers who:__
 
 - Work from different locations (office with corporate proxy vs. home without)
 - Need to quickly test applications with and without proxy
-- Want Git and Gradle operations to work seamlessly with their proxy setup
+- Want Git and Gradle operations to work seamlessly with their proxy setup across multiple projects
 - Want to avoid manually configuring proxy settings in multiple places (IDE, Git, Gradle)
 - Have complex proxy setups with non-proxy hosts or special characters in credentials
+- Work with multiple projects simultaneously and need consistent proxy configuration
 - Prefer visual indicators and one-click solutions
 
 The plugin adds a simple toggle action to your Tools menu and an optional status bar widget, making proxy management
@@ -46,6 +48,7 @@ src/main/kotlin/org/holululu/proxythemall/
 ├── core/
 │   └── ProxyController.kt             # Central controller for proxy operations
 ├── listeners/
+│   ├── HttpProxySettingsChangeListener.kt # Monitors IntelliJ's built-in proxy settings
 │   ├── ProxyStateChangeListener.kt    # Handles proxy state change events
 │   ├── ProxyStateChangeManager.kt     # Manages state change notifications
 │   └── WidgetStateChangeListener.kt   # Updates widget when state changes
@@ -58,6 +61,7 @@ src/main/kotlin/org/holululu/proxythemall/
 ├── services/
 │   ├── ProxyInfoExtractor.kt          # Extracts proxy information from IDE settings
 │   ├── ProxyService.kt                # Core proxy management logic
+│   ├── ProxyThemAllStartupService.kt  # Handles plugin initialization and cleanup
 │   ├── git/
 │   │   ├── GitProxyConfigurer.kt      # Git proxy configuration management
 │   │   └── GitProxyService.kt         # Git-specific proxy operations
