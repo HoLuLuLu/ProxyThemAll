@@ -64,11 +64,7 @@ class GitProxyService {
      * Removes Git proxy settings
      */
     fun removeGitProxySettings(project: Project?, onComplete: (String) -> Unit) {
-        if (!settings.applyProxyToGit) {
-            onComplete("Git proxy disabled in settings")
-            return
-        }
-
+        // Always perform cleanup regardless of settings to ensure clean state
         gitProxyConfigurer.removeGitProxySettings(project, onComplete)
     }
 }

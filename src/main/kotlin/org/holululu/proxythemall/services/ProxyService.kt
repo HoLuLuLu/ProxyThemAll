@@ -29,8 +29,17 @@ class ProxyService {
     fun getCurrentProxyState(): ProxyState {
         return try {
             val proxySettings = ProxySettings.getInstance()
+            val currentConfig = proxySettings.getProxyConfiguration()
+            
             when {
-                isProxyEnabled(proxySettings) -> ProxyState.ENABLED
+                isProxyEnabled(proxySettings) -> {
+                    // If proxy is enabled but we don't have it stored, store it now
+                    if (lastProxyConfiguration == null || lastProxyConfiguration is ProxyConfiguration.DirectProxy) {
+                        lastProxyConfiguration = currentConfig
+                        LOG.debug("Stored current proxy configuration for future use")
+                    }
+                    ProxyState.ENABLED
+                }
                 isProxyConfigured() -> ProxyState.DISABLED
                 else -> ProxyState.NOT_CONFIGURED
             }
@@ -69,6 +78,38 @@ class ProxyService {
         } catch (e: Exception) {
             LOG.error("Failed to toggle proxy", e)
             getCurrentProxyState() // Return current state if toggle fails
+        }
+    }
+
+    /**
+     * Forces the proxy to be enabled by using the current proxy configuration
+     * This is useful when we know there's a proxy configuration but it might not be stored
+     * @return the new proxy state after enabling
+     */
+    fun forceEnableProxy(): ProxyState {
+        return try {
+            val proxySettings = ProxySettings.getInstance()
+            val currentConfig = proxySettings.getProxyConfiguration()
+
+            // If current config is already a non-direct proxy, we're already enabled
+            if (currentConfig !is ProxyConfiguration.DirectProxy) {
+                LOG.debug("Proxy is already enabled")
+                return ProxyState.ENABLED
+            }
+
+            // Try to enable using stored configuration
+            lastProxyConfiguration?.let { config ->
+                proxySettings.setProxyConfiguration(config)
+                LOG.debug("Proxy enabled using stored configuration")
+                return ProxyState.ENABLED
+            }
+
+            // If no stored configuration, we can't enable
+            LOG.warn("Cannot force enable proxy - no configuration available")
+            ProxyState.NOT_CONFIGURED
+        } catch (e: Exception) {
+            LOG.error("Failed to force enable proxy", e)
+            getCurrentProxyState()
         }
     }
 
@@ -134,10 +175,16 @@ class ProxyService {
         try {
             lastProxyConfiguration?.let { config ->
                 proxySettings.setProxyConfiguration(config)
-                LOG.debug("Proxy enabled successfully")
+                LOG.debug("Proxy enabled successfully using stored configuration")
             } ?: run {
-                LOG.warn("No stored proxy configuration available to restore")
-                throw IllegalStateException("No proxy configuration available to enable")
+                // If no stored configuration, try to use current configuration if it's not direct
+                val currentConfig = proxySettings.getProxyConfiguration()
+                if (currentConfig !is ProxyConfiguration.DirectProxy) {
+                    LOG.debug("Proxy already enabled with current configuration")
+                } else {
+                    LOG.warn("No stored proxy configuration available to restore")
+                    throw IllegalStateException("No proxy configuration available to enable")
+                }
             }
         } catch (e: Exception) {
             LOG.error("Failed to enable proxy", e)

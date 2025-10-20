@@ -162,6 +162,51 @@ class ProxyController {
     }
 
     /**
+     * Configures Git and Gradle proxy services silently without showing notifications
+     */
+    private fun configureProxyServicesSilently(project: Project?) {
+        var gitStatus = ""
+        var gradleStatus = ""
+        var completedCount = 0
+
+        val onComplete = {
+            completedCount++
+            if (completedCount == 2) {
+                val combinedStatus = buildString {
+                    if (gitStatus.isNotEmpty()) append(MESSAGE_SEPARATOR).append("Git: $gitStatus")
+                    if (gradleStatus.isNotEmpty()) append(MESSAGE_SEPARATOR).append("Gradle: $gradleStatus")
+                }
+
+                LOG.debug("Proxy services configured silently: $combinedStatus")
+            }
+        }
+
+        // Configure Git proxy
+        try {
+            gitProxyService.configureGitProxy(project) { status ->
+                gitStatus = status
+                onComplete()
+            }
+        } catch (e: Exception) {
+            LOG.warn("Failed to configure Git proxy", e)
+            gitStatus = "Git configuration failed"
+            onComplete()
+        }
+
+        // Configure Gradle proxy
+        try {
+            gradleProxyService.configureGradleProxy(project) { status ->
+                gradleStatus = status
+                onComplete()
+            }
+        } catch (e: Exception) {
+            LOG.warn("Failed to configure Gradle proxy", e)
+            gradleStatus = "Gradle configuration failed"
+            onComplete()
+        }
+    }
+
+    /**
      * Updates the status bar widget to reflect the current proxy state
      */
     private fun updateStatusBarWidget(project: Project?) {
@@ -180,6 +225,34 @@ class ProxyController {
      * @param targetEnabled The desired proxy state after cleanup (true = enabled, false = disabled)
      */
     fun cleanupAndReapplyProxySettingsForAllProjects(targetEnabled: Boolean) {
+        cleanupAndReapplyProxySettingsForAllProjectsInternal(targetEnabled, showNotifications = true)
+    }
+
+    /**
+     * Performs a complete cleanup and reapplication of proxy settings for all open projects silently.
+     * This method ensures a clean state by:
+     * 1. Disabling all proxy settings (IDE, Git, Gradle)
+     * 2. Reapplying the proxy configuration based on the desired state
+     *
+     * This version does not show notifications to avoid duplicate notifications when triggered
+     * by the HttpProxySettingsChangeListener.
+     *
+     * @param targetEnabled The desired proxy state after cleanup (true = enabled, false = disabled)
+     */
+    fun cleanupAndReapplyProxySettingsForAllProjectsSilently(targetEnabled: Boolean) {
+        cleanupAndReapplyProxySettingsForAllProjectsInternal(targetEnabled, showNotifications = false)
+    }
+
+    /**
+     * Internal method that performs the actual cleanup and reapplication logic.
+     *
+     * @param targetEnabled The desired proxy state after cleanup (true = enabled, false = disabled)
+     * @param showNotifications Whether to show notifications during the process
+     */
+    private fun cleanupAndReapplyProxySettingsForAllProjectsInternal(
+        targetEnabled: Boolean,
+        showNotifications: Boolean
+    ) {
         try {
             LOG.info("Starting proxy cleanup and reapplication process for all projects (target: ${if (targetEnabled) "enabled" else "disabled"})")
 
@@ -187,35 +260,67 @@ class ProxyController {
             val openProjects = com.intellij.openapi.project.ProjectManager.getInstance().openProjects.toList()
             LOG.debug("Found ${openProjects.size} open projects")
 
-            // Step 1: Force cleanup - disable all proxy settings to get clean state
-            // IDE proxy settings are global, so we only need to clean them once
-            performGlobalCleanup()
-
-            // Step 2: Clean up and configure project-specific settings for each project
-            openProjects.forEach { project ->
-                try {
-                    LOG.debug("Processing project: ${project.name}")
-                    performProjectSpecificCleanup(project)
-
-                    if (targetEnabled) {
-                        configureProxyServices(project, true)
-                    } else {
-                        configureProxyServices(project, false)
-                    }
-
-                    updateStatusBarWidget(project)
-                } catch (e: Exception) {
-                    LOG.warn("Failed to process project ${project.name}", e)
-                }
-            }
-
-            // Step 3: Apply the desired IDE proxy state (global)
             if (targetEnabled) {
-                val newState = proxyService.toggleProxy()
-                if (newState == ProxyState.ENABLED) {
-                    LOG.debug("Proxy enabled after cleanup")
-                } else {
-                    LOG.warn("Failed to enable proxy after cleanup, current state: $newState")
+                // When target is enabled, we should NOT clean up first - just ensure proxy is enabled and configure services
+                LOG.debug("Target is enabled - ensuring proxy is enabled and configuring services")
+
+                val currentState = proxyService.getCurrentProxyState()
+                LOG.debug("Current proxy state: $currentState")
+
+                // If proxy is not enabled, try to enable it
+                if (currentState != ProxyState.ENABLED) {
+                    val newState = proxyService.forceEnableProxy()
+                    if (newState == ProxyState.ENABLED) {
+                        LOG.debug("Proxy enabled before service configuration")
+                    } else {
+                        LOG.warn("Failed to enable proxy before service configuration, current state: $newState")
+                    }
+                }
+
+                // Configure project-specific settings for each project (Git and Gradle)
+                openProjects.forEach { project ->
+                    try {
+                        LOG.debug("Configuring services for project: ${project.name}")
+                        if (showNotifications) {
+                            configureProxyServices(project, true)
+                        } else {
+                            configureProxyServicesSilently(project)
+                        }
+                        updateStatusBarWidget(project)
+                    } catch (e: Exception) {
+                        LOG.warn("Failed to configure services for project ${project.name}", e)
+                    }
+                }
+            } else {
+                // When target is disabled, perform full cleanup
+                LOG.debug("Target is disabled - performing full cleanup")
+
+                // Step 1: Clean up project-specific settings for each project first
+                openProjects.forEach { project ->
+                    try {
+                        LOG.debug("Cleaning up project: ${project.name}")
+                        performProjectSpecificCleanup(project)
+                    } catch (e: Exception) {
+                        LOG.warn("Failed to cleanup project ${project.name}", e)
+                    }
+                }
+
+                // Step 2: Disable IDE proxy (global cleanup)
+                performGlobalCleanup()
+
+                // Step 3: Configure project-specific settings for each project (should remove any remaining settings)
+                openProjects.forEach { project ->
+                    try {
+                        LOG.debug("Configuring services for project: ${project.name}")
+                        if (showNotifications) {
+                            configureProxyServices(project, false)
+                        } else {
+                            configureProxyServicesSilently(project)
+                        }
+                        updateStatusBarWidget(project)
+                    } catch (e: Exception) {
+                        LOG.warn("Failed to configure services for project ${project.name}", e)
+                    }
                 }
             }
 
@@ -293,20 +398,6 @@ class ProxyController {
             ProxyState.NOT_CONFIGURED -> false
         }
         cleanupAndReapplyProxySettingsForAllProjects(targetEnabled)
-    }
-
-    /**
-     * Convenience method for cleanup and reapplication based on current proxy state.
-     * This determines the target state from the current proxy configuration.
-     */
-    fun cleanupAndReapplyProxySettings(project: Project?) {
-        val currentState = proxyService.getCurrentProxyState()
-        val targetEnabled = when (currentState) {
-            ProxyState.ENABLED -> true
-            ProxyState.DISABLED -> false
-            ProxyState.NOT_CONFIGURED -> false
-        }
-        cleanupAndReapplyProxySettings(project, targetEnabled)
     }
 
     /**

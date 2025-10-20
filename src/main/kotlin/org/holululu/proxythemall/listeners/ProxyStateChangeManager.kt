@@ -1,5 +1,6 @@
 package org.holululu.proxythemall.listeners
 
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.concurrency.AppExecutorUtil
 import org.holululu.proxythemall.models.ProxyState
 import org.holululu.proxythemall.services.ProxyService
@@ -17,6 +18,8 @@ class ProxyStateChangeManager {
 
         // Check interval for proxy state changes (in seconds)
         private const val STATE_CHECK_INTERVAL = 2L
+
+        private val LOG = Logger.getInstance(ProxyStateChangeManager::class.java)
     }
 
     private val proxyService = ProxyService.instance
@@ -34,9 +37,11 @@ class ProxyStateChangeManager {
     fun addListener(listener: ProxyStateChangeListener) {
         synchronized(listeners) {
             listeners.add(listener)
+            LOG.debug("Added proxy state change listener: ${listener::class.simpleName}. Total listeners: ${listeners.size}")
 
             // Start periodic checking if this is the first listener
             if (listeners.size == 1) {
+                LOG.info("Starting periodic proxy state checking (interval: ${STATE_CHECK_INTERVAL}s)")
                 startPeriodicStateCheck()
             }
         }
@@ -62,6 +67,7 @@ class ProxyStateChangeManager {
     fun checkForStateChanges() {
         val currentState = proxyService.getCurrentProxyState()
         if (lastKnownProxyState != currentState) {
+            LOG.info("Proxy state changed from $lastKnownProxyState to $currentState - notifying listeners")
             lastKnownProxyState = currentState
             notifyListeners(currentState)
         }

@@ -6,49 +6,36 @@
 
 ### Added
 
-- **Automatic Proxy State Cleanup**
-    - Complete proxy cleanup and reapplication on IDE startup
-    - Automatic cleanup when HTTP proxy settings are changed in IntelliJ's built-in settings
-    - Automatic cleanup when ProxyThemAll plugin settings are modified
-    - Ensures consistent proxy state across IDE, Git, and Gradle configurations
+- **Automatic Proxy Reset on Settings Changes**
+    - Automatic cleanup and reapplication of proxy settings when plugin settings are modified
+    - Cleanup and reapplication on IDE startup to ensure consistent proxy state
+    - HttpProxySettingsChangeListener to monitor IntelliJ's built-in proxy settings changes
+    - ProxyThemAllStartupService and ProxyThemAllStartupActivity for initialization
 
 - **Multi-Project Support**
     - Proxy configuration changes now apply to all open projects simultaneously
-    - Individual project-specific cleanup for Git and Gradle settings
-    - Global IDE proxy settings managed once, project settings handled per project
-    - Enhanced logging to show which projects are being processed
-
-- **Enhanced Settings Management**
-    - Settings changes trigger immediate cleanup and reapplication across all projects
-    - Detection of changes in Git integration, Gradle integration, and notification settings
-    - Automatic synchronization of proxy configurations when settings are modified
+  - Separated global cleanup (IDE proxy) from project-specific cleanup (Git, Gradle)
+  - Enhanced error handling with per-project failure isolation
 
 ### Changed
 
 - **ProxyController Enhancements**
     - Added `cleanupAndReapplyProxySettingsForAllProjects()` method for multi-project support
-    - Separated global cleanup (IDE proxy) from project-specific cleanup (Git, Gradle)
-    - Enhanced error handling with per-project failure isolation
-    - Improved logging with detailed project processing information
-
-- **Startup Service**
-    - ProxyThemAllStartupService now performs cleanup on every IDE startup
-    - Automatic registration of HTTP proxy settings change listener
-    - Multi-project cleanup and reapplication during initialization
+  - Added cleanup methods: `performGlobalCleanup()` and `performProjectSpecificCleanup()`
+  - Enhanced logging for troubleshooting and monitoring
 
 - **Settings Integration**
-    - ProxyThemAllConfigurable now triggers cleanup for all projects when settings change
-    - Enhanced change detection for all proxy-related settings
-    - Improved user experience with immediate effect of setting changes
+    - ProxyThemAllConfigurable now triggers cleanup when Git integration, Gradle integration, or notification settings
+      change
+    - Immediate effect of setting changes across all open projects
 
 ### Technical Details
 
-- New HttpProxySettingsChangeListener for monitoring IntelliJ's built-in proxy settings
+- New HttpProxySettingsChangeListener for monitoring proxy settings changes
+- New ProxyThemAllStartupService for handling initialization tasks
+- New ProxyThemAllStartupActivity for startup registration
 - Enhanced ProxyController with multi-project processing capabilities
-- Separated cleanup methods: `performGlobalCleanup()` and `performProjectSpecificCleanup()`
 - Improved service initialization and listener registration
-- Added comprehensive logging for troubleshooting and monitoring
-- Backward compatibility maintained for single-project operations
 
 ## [0.0.3] - 2025-10-13
 

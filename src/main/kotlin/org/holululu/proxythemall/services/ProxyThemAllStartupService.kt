@@ -18,31 +18,27 @@ class ProxyThemAllStartupService {
 
     companion object {
         private val LOG = Logger.getInstance(ProxyThemAllStartupService::class.java)
-    }
 
-    init {
-        initialize()
+        @JvmStatic
+        fun getInstance(): ProxyThemAllStartupService {
+            return ApplicationManager.getApplication().getService(ProxyThemAllStartupService::class.java)
+        }
     }
 
     /**
-     * Initializes the plugin components
+     * Performs initial setup when called by the startup activity
      */
-    private fun initialize() {
+    fun performInitialSetup() {
         try {
-            LOG.info("Initializing ProxyThemAll plugin")
-
-            // Register the HTTP proxy settings change listener
-            // This ensures that changes to IntelliJ's built-in proxy settings
-            // trigger cleanup and reapplication of proxy configurations
-            HttpProxySettingsChangeListener.instance.register()
+            LOG.info("Performing initial setup for ProxyThemAll plugin")
 
             // Perform cleanup and reapplication on IDE startup
             // This ensures a clean state every time the IDE starts
             performStartupCleanup()
 
-            LOG.info("ProxyThemAll plugin initialized successfully")
+            LOG.info("ProxyThemAll plugin initial setup completed successfully")
         } catch (e: Exception) {
-            LOG.error("Failed to initialize ProxyThemAll plugin", e)
+            LOG.error("Failed to perform initial setup for ProxyThemAll plugin", e)
         }
     }
 
@@ -57,6 +53,10 @@ class ProxyThemAllStartupService {
                 // Trigger cleanup and reapplication for all open projects
                 // This ensures all proxy configurations (IDE, Git, Gradle) are in sync across all projects
                 ProxyController.instance.cleanupAndReapplyProxySettings()
+
+                // Also trigger immediate proxy configuration check
+                // This handles cases where proxy was manually configured before plugin startup
+                HttpProxySettingsChangeListener.instance.onProxySettingsChanged()
 
                 LOG.info("Startup cleanup and reapplication completed successfully for all projects")
             } catch (e: Exception) {

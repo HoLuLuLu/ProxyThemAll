@@ -1,8 +1,11 @@
 package org.holululu.proxythemall.listeners
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.util.messages.MessageBusConnection
 import org.holululu.proxythemall.core.ProxyController
 import org.holululu.proxythemall.models.ProxyState
+import org.holululu.proxythemall.services.ProxyService
 
 /**
  * Listener that handles HTTP proxy settings changes by triggering cleanup and reapplication
@@ -21,12 +24,16 @@ class HttpProxySettingsChangeListener : ProxyStateChangeListener {
     }
 
     private val proxyController = ProxyController.instance
+    private val proxyService = ProxyService.instance
     private var lastProcessedState: ProxyState? = null
+    private var messageBusConnection: MessageBusConnection? = null
 
     /**
      * Called when the proxy state changes due to HTTP proxy settings modifications
      */
     override fun onProxyStateChanged(newState: ProxyState) {
+        LOG.info("HttpProxySettingsChangeListener.onProxyStateChanged called with state: $newState, lastProcessedState: $lastProcessedState")
+        
         // Only process if the state actually changed to avoid unnecessary cleanup cycles
         if (lastProcessedState != newState) {
             lastProcessedState = newState
@@ -41,25 +48,53 @@ class HttpProxySettingsChangeListener : ProxyStateChangeListener {
             }
 
             // Trigger cleanup and reapplication for all open projects with the appropriate target state
-            proxyController.cleanupAndReapplyProxySettingsForAllProjects(targetEnabled)
+            // Use the silent version to avoid duplicate notifications
+            proxyController.cleanupAndReapplyProxySettingsForAllProjectsSilently(targetEnabled)
 
             LOG.debug("Cleanup and reapplication completed for HTTP proxy settings change across all projects")
+        } else {
+            LOG.debug("Proxy state unchanged ($newState), skipping cleanup")
         }
     }
 
     /**
-     * Registers this listener with the ProxyStateChangeManager
+     * Directly triggers proxy configuration when settings change
      */
-    fun register() {
-        ProxyStateChangeManager.instance.addListener(this)
-        LOG.debug("HttpProxySettingsChangeListener registered")
+    fun onProxySettingsChanged() {
+        LOG.info("Direct proxy settings change detected - triggering immediate configuration")
+
+        // Get current state and trigger configuration
+        val currentState = proxyService.getCurrentProxyState()
+        val targetEnabled = when (currentState) {
+            ProxyState.ENABLED -> true
+            ProxyState.DISABLED -> false
+            ProxyState.NOT_CONFIGURED -> false
+        }
+
+        // Trigger immediate cleanup and reapplication
+        // Use the silent version to avoid duplicate notifications
+        ApplicationManager.getApplication().invokeLater {
+            proxyController.cleanupAndReapplyProxySettingsForAllProjectsSilently(targetEnabled)
+        }
     }
 
     /**
-     * Unregisters this listener from the ProxyStateChangeManager
+     * Registers this listener with the ProxyStateChangeManager and direct proxy settings listener
      */
-    fun unregister() {
-        ProxyStateChangeManager.instance.removeListener(this)
-        LOG.debug("HttpProxySettingsChangeListener unregistered")
+    fun register() {
+        // Register with our polling-based state change manager
+        ProxyStateChangeManager.instance.addListener(this)
+
+        // Also try to register for direct proxy settings changes
+        try {
+            messageBusConnection = ApplicationManager.getApplication().messageBus.connect()
+            // Note: IntelliJ doesn't provide a direct proxy settings change topic,
+            // so we'll rely on our polling mechanism and manual triggers
+            LOG.debug("HttpProxySettingsChangeListener registered with polling mechanism")
+        } catch (e: Exception) {
+            LOG.warn("Failed to register direct proxy settings listener, using polling only", e)
+        }
+        
+        LOG.debug("HttpProxySettingsChangeListener registered")
     }
 }

@@ -14,11 +14,14 @@ including automatic Git and Gradle proxy synchronization with multi-project supp
 __Key Features:__
 
 - __Quick proxy toggle__: Switch proxy on/off instantly from the Tools menu or status bar
+- __Automatic proxy reset__: Automatically cleans up and reapplies proxy settings on IDE startup and when settings
+  change
 - __Git integration__: Automatically synchronizes Git proxy settings with IDE proxy configuration, including URL
   encoding for credentials and non-proxy hosts support
 - __Gradle integration (Experimental)__: Automatically configures Gradle proxy settings using JVM system properties and
   gradle.properties file
 - __Multi-project support__: Proxy configuration changes apply to all open projects simultaneously
+- __Intelligent state management__: Monitors IntelliJ's built-in proxy settings and maintains consistent state
 - __Non-proxy hosts support__: Automatically handles hosts that should bypass proxy settings for both Git and Gradle
 - __Visual status indicator__: See your current proxy state at a glance in the status bar
 - __Smart memory__: Remembers your proxy settings when you turn them off, so you can easily turn them back on
@@ -61,6 +64,7 @@ src/main/kotlin/org/holululu/proxythemall/
 ├── services/
 │   ├── ProxyInfoExtractor.kt          # Extracts proxy information from IDE settings
 │   ├── ProxyService.kt                # Core proxy management logic
+│   ├── ProxyThemAllStartupActivity.kt # Startup activity for plugin initialization
 │   ├── ProxyThemAllStartupService.kt  # Handles plugin initialization and cleanup
 │   ├── git/
 │   │   ├── GitProxyConfigurer.kt      # Git proxy configuration management
