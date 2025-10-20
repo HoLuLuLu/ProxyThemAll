@@ -2,6 +2,8 @@
 
 # ProxyThemAll Changelog
 
+## [Unreleased]
+
 ## [0.0.3] - 2025-10-13
 
 ### Added
