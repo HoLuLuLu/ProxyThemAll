@@ -4,6 +4,48 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Automatic Proxy Reset on Settings Changes**
+    - Automatic cleanup and reapplication of proxy settings when plugin settings are modified
+    - Cleanup and reapplication on IDE startup to ensure consistent proxy state
+    - HttpProxySettingsChangeListener to monitor IntelliJ's built-in proxy settings changes
+    - ProxyThemAllStartupService and ProxyThemAllStartupActivity for initialization
+
+- **Multi-Project Support**
+    - Proxy configuration changes now apply to all open projects simultaneously
+  - Separated global cleanup (IDE proxy) from project-specific cleanup (Git, Gradle)
+  - Enhanced error handling with per-project failure isolation
+
+### Changed
+
+- **ProxyController Enhancements**
+    - Added `cleanupAndReapplyProxySettingsForAllProjects()` method for multi-project support
+  - Added cleanup methods: `performGlobalCleanup()` and `performProjectSpecificCleanup()`
+  - Enhanced logging for troubleshooting and monitoring
+
+- **Settings Integration**
+    - ProxyThemAllConfigurable now triggers cleanup when Git integration, Gradle integration, or notification settings
+      change
+    - Immediate effect of setting changes across all open projects
+  - Automatic cleanup of proxy settings when individual features (Git/Gradle) are disabled in settings
+
+### Fixed
+
+- **Feature Disabling Issue**
+    - Fixed issue where disabling Git or Gradle proxy support in settings would not remove existing proxy configurations
+    - GitProxyService and GradleProxyService now automatically clean up proxy settings when their respective features
+      are disabled
+    - Users no longer need to disable the entire proxy to clean up individual feature settings
+
+### Technical Details
+
+- New HttpProxySettingsChangeListener for monitoring proxy settings changes
+- New ProxyThemAllStartupService for handling initialization tasks
+- New ProxyThemAllStartupActivity for startup registration
+- Enhanced ProxyController with multi-project processing capabilities
+- Improved service initialization and listener registration
+
 ## [0.0.3] - 2025-10-13
 
 ### Added

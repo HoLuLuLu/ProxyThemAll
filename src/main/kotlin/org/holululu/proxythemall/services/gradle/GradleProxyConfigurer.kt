@@ -5,7 +5,6 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import org.holululu.proxythemall.models.ProxyInfo
-import org.holululu.proxythemall.utils.ProxyUrlBuilder
 import java.io.File
 
 private const val GRADLE_HOSTS_SEPERATOR = "|"
@@ -46,8 +45,6 @@ class GradleProxyConfigurer {
         private const val PROXY_SECTION_START = "# === ProxyThemAll Managed Proxy Settings - START ==="
         private const val PROXY_SECTION_END = "# === ProxyThemAll Managed Proxy Settings - END ==="
     }
-
-    private val proxyUrlBuilder = ProxyUrlBuilder.instance
 
     /**
      * Sets proxy for Gradle using extracted proxy information with direct credential support
@@ -102,12 +99,13 @@ class GradleProxyConfigurer {
 
                     // First try to remove project-level settings
                     val gradlePropertiesFile = getGradlePropertiesFile(project)
-                    if (gradlePropertiesFile != null && gradlePropertiesFile.exists()) {
-                        if (removeProxyPropertiesFromFile(gradlePropertiesFile)) {
-                            LOG.info("Project-level Gradle proxy settings removed")
-                            removedAny = true
-                            onComplete("proxy removed from project")
-                        }
+                    if (gradlePropertiesFile != null && gradlePropertiesFile.exists() && removeProxyPropertiesFromFile(
+                            gradlePropertiesFile
+                        )
+                    ) {
+                        LOG.info("Project-level Gradle proxy settings removed")
+                        removedAny = true
+                        onComplete("proxy removed from project")
                     }
 
                     // If no project-level settings were removed, try global settings
@@ -223,7 +221,7 @@ class GradleProxyConfigurer {
         for (i in lines.indices) {
             val line = lines[i].trim()
             if (line == PROXY_SECTION_START) {
-                startIndex = i
+                startIndex = i - 1
             } else if (line == PROXY_SECTION_END && startIndex != -1) {
                 endIndex = i
                 break

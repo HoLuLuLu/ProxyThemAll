@@ -162,12 +162,236 @@ class ProxyController {
     }
 
     /**
+     * Configures Git and Gradle proxy services silently without showing notifications
+     */
+    private fun configureProxyServicesSilently(project: Project?) {
+        var gitStatus = ""
+        var gradleStatus = ""
+        var completedCount = 0
+
+        val onComplete = {
+            completedCount++
+            if (completedCount == 2) {
+                val combinedStatus = buildString {
+                    if (gitStatus.isNotEmpty()) append(MESSAGE_SEPARATOR).append("Git: $gitStatus")
+                    if (gradleStatus.isNotEmpty()) append(MESSAGE_SEPARATOR).append("Gradle: $gradleStatus")
+                }
+
+                LOG.debug("Proxy services configured silently: $combinedStatus")
+            }
+        }
+
+        // Configure Git proxy
+        try {
+            gitProxyService.configureGitProxy(project) { status ->
+                gitStatus = status
+                onComplete()
+            }
+        } catch (e: Exception) {
+            LOG.warn("Failed to configure Git proxy", e)
+            gitStatus = "Git configuration failed"
+            onComplete()
+        }
+
+        // Configure Gradle proxy
+        try {
+            gradleProxyService.configureGradleProxy(project) { status ->
+                gradleStatus = status
+                onComplete()
+            }
+        } catch (e: Exception) {
+            LOG.warn("Failed to configure Gradle proxy", e)
+            gradleStatus = "Gradle configuration failed"
+            onComplete()
+        }
+    }
+
+    /**
      * Updates the status bar widget to reflect the current proxy state
      */
     private fun updateStatusBarWidget(project: Project?) {
         project?.let { p ->
             val statusBar = WindowManager.getInstance().getStatusBar(p)
             statusBar?.updateWidget(ProxyStatusBarWidget.WIDGET_ID)
+        }
+    }
+
+    /**
+     * Performs a complete cleanup and reapplication of proxy settings for all open projects.
+     * This method ensures a clean state by:
+     * 1. Disabling all proxy settings (IDE, Git, Gradle)
+     * 2. Reapplying the proxy configuration based on the desired state
+     *
+     * @param targetEnabled The desired proxy state after cleanup (true = enabled, false = disabled)
+     */
+    fun cleanupAndReapplyProxySettingsForAllProjects(targetEnabled: Boolean) {
+        cleanupAndReapplyProxySettingsForAllProjectsInternal(targetEnabled, showNotifications = true)
+    }
+
+    /**
+     * Performs a complete cleanup and reapplication of proxy settings for all open projects silently.
+     * This method ensures a clean state by:
+     * 1. Disabling all proxy settings (IDE, Git, Gradle)
+     * 2. Reapplying the proxy configuration based on the desired state
+     *
+     * This version does not show notifications to avoid duplicate notifications when triggered
+     * by the HttpProxySettingsChangeListener.
+     *
+     * @param targetEnabled The desired proxy state after cleanup (true = enabled, false = disabled)
+     */
+    fun cleanupAndReapplyProxySettingsForAllProjectsSilently(targetEnabled: Boolean) {
+        cleanupAndReapplyProxySettingsForAllProjectsInternal(targetEnabled, showNotifications = false)
+    }
+
+    /**
+     * Internal method that performs the actual cleanup and reapplication logic.
+     *
+     * @param targetEnabled The desired proxy state after cleanup (true = enabled, false = disabled)
+     * @param showNotifications Whether to show notifications during the process
+     */
+    private fun cleanupAndReapplyProxySettingsForAllProjectsInternal(
+        targetEnabled: Boolean,
+        showNotifications: Boolean
+    ) {
+        try {
+            LOG.info("Starting proxy cleanup and reapplication process for all projects (target: ${if (targetEnabled) "enabled" else "disabled"})")
+
+            // Get all open projects
+            val openProjects = com.intellij.openapi.project.ProjectManager.getInstance().openProjects.toList()
+            LOG.debug("Found ${openProjects.size} open projects")
+
+            if (targetEnabled) {
+                // When target is enabled, we should NOT clean up first - just ensure proxy is enabled and configure services
+                LOG.debug("Target is enabled - ensuring proxy is enabled and configuring services")
+
+                val currentState = proxyService.getCurrentProxyState()
+                LOG.debug("Current proxy state: $currentState")
+
+                // If proxy is not enabled, try to enable it
+                if (currentState != ProxyState.ENABLED) {
+                    val newState = proxyService.forceEnableProxy()
+                    if (newState == ProxyState.ENABLED) {
+                        LOG.debug("Proxy enabled before service configuration")
+                    } else {
+                        LOG.warn("Failed to enable proxy before service configuration, current state: $newState")
+                    }
+                }
+
+                // Configure project-specific settings for each project (Git and Gradle)
+                openProjects.forEach { project ->
+                    try {
+                        LOG.debug("Configuring services for project: ${project.name}")
+                        if (showNotifications) {
+                            configureProxyServices(project, true)
+                        } else {
+                            configureProxyServicesSilently(project)
+                        }
+                        updateStatusBarWidget(project)
+                    } catch (e: Exception) {
+                        LOG.warn("Failed to configure services for project ${project.name}", e)
+                    }
+                }
+            } else {
+                // When target is disabled, perform full cleanup
+                LOG.debug("Target is disabled - performing full cleanup")
+
+                // Step 1: Clean up project-specific settings for each project first
+                openProjects.forEach { project ->
+                    try {
+                        LOG.debug("Cleaning up project: ${project.name}")
+                        performProjectSpecificCleanup(project)
+                    } catch (e: Exception) {
+                        LOG.warn("Failed to cleanup project ${project.name}", e)
+                    }
+                }
+
+                // Step 2: Disable IDE proxy (global cleanup)
+                performGlobalCleanup()
+
+                // Step 3: Configure project-specific settings for each project (should remove any remaining settings)
+                openProjects.forEach { project ->
+                    try {
+                        LOG.debug("Configuring services for project: ${project.name}")
+                        if (showNotifications) {
+                            configureProxyServices(project, false)
+                        } else {
+                            configureProxyServicesSilently(project)
+                        }
+                        updateStatusBarWidget(project)
+                    } catch (e: Exception) {
+                        LOG.warn("Failed to configure services for project ${project.name}", e)
+                    }
+                }
+            }
+
+            // Notify listeners
+            stateChangeManager.notifyStateChanged()
+
+            LOG.info("Proxy cleanup and reapplication completed successfully for all ${openProjects.size} projects")
+        } catch (e: Exception) {
+            LOG.error("Failed to cleanup and reapply proxy settings for all projects", e)
+            // Show error notification to first project if available
+            val firstProject = com.intellij.openapi.project.ProjectManager.getInstance().openProjects.firstOrNull()
+            notificationService.showNotification(
+                firstProject,
+                NotificationMessages.proxyDisabled("Settings cleanup failed: ${e.message ?: "Unknown error"}")
+            )
+        }
+    }
+
+    /**
+     * Convenience method for cleanup and reapplication based on current proxy state.
+     * This determines the target state from the current proxy configuration and applies to all projects.
+     */
+    fun cleanupAndReapplyProxySettings() {
+        val currentState = proxyService.getCurrentProxyState()
+        val targetEnabled = when (currentState) {
+            ProxyState.ENABLED -> true
+            ProxyState.DISABLED -> false
+            ProxyState.NOT_CONFIGURED -> false
+        }
+        cleanupAndReapplyProxySettingsForAllProjects(targetEnabled)
+    }
+
+    /**
+     * Performs cleanup of global proxy settings (IDE proxy settings)
+     */
+    private fun performGlobalCleanup() {
+        LOG.debug("Performing global proxy cleanup")
+
+        // Force disable IDE proxy settings (global)
+        try {
+            val proxySettings = com.intellij.util.net.ProxySettings.getInstance()
+            val directProxy = object : com.intellij.util.net.ProxyConfiguration.DirectProxy {}
+            proxySettings.setProxyConfiguration(directProxy)
+            LOG.debug("Global IDE proxy settings cleaned up")
+        } catch (e: Exception) {
+            LOG.warn("Failed to cleanup global IDE proxy settings", e)
+        }
+    }
+
+    /**
+     * Performs cleanup of project-specific proxy settings (Git, Gradle)
+     */
+    private fun performProjectSpecificCleanup(project: Project) {
+        LOG.debug("Performing project-specific proxy cleanup for: ${project.name}")
+
+        // Force cleanup Git proxy settings for this project
+        try {
+            gitProxyService.removeGitProxySettings(project) { status ->
+                LOG.debug("Git proxy cleanup for ${project.name}: $status")
+            }
+        } catch (e: Exception) {
+            LOG.warn("Failed to cleanup Git proxy settings for project ${project.name}", e)
+        }
+
+        // Force cleanup Gradle proxy settings for this project
+        try {
+            gradleProxyService.removeGradleProxySettings(project) { status ->
+                LOG.debug("Gradle proxy cleanup for ${project.name}: $status")
+            }
+        } catch (e: Exception) {
+            LOG.warn("Failed to cleanup Gradle proxy settings for project ${project.name}", e)
         }
     }
 }

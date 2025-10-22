@@ -32,7 +32,10 @@ class GradleProxyService {
      */
     fun configureGradleProxy(project: Project?, onComplete: (String) -> Unit) {
         if (!settings.enableGradleProxySupport) {
-            onComplete("Gradle proxy disabled in settings")
+            // If Gradle proxy is disabled in settings, clean up any existing proxy settings
+            gradleProxyConfigurer.removeGradleProxySettings(project) { status ->
+                onComplete("Gradle proxy disabled in settings - $status")
+            }
             return
         }
 
@@ -64,11 +67,7 @@ class GradleProxyService {
      * Removes Gradle proxy settings
      */
     fun removeGradleProxySettings(project: Project?, onComplete: (String) -> Unit) {
-        if (!settings.enableGradleProxySupport) {
-            onComplete("Gradle proxy disabled in settings")
-            return
-        }
-
+        // Always perform cleanup regardless of settings to ensure clean state
         gradleProxyConfigurer.removeGradleProxySettings(project, onComplete)
     }
 }

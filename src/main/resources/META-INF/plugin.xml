@@ -17,6 +17,7 @@
                                  id="org.holululu.proxythemall.settings"
                                  displayName="ProxyThemAll"/>
         <applicationService serviceImplementation="org.holululu.proxythemall.settings.ProxyThemAllSettings"/>
+        <postStartupActivity implementation="org.holululu.proxythemall.services.ProxyThemAllStartupActivity"/>
     </extensions>
 
     <actions>

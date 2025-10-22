@@ -8,6 +8,7 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
+import org.holululu.proxythemall.core.ProxyController
 import org.holululu.proxythemall.widgets.ProxyStatusBarWidget
 import javax.swing.JComponent
 
@@ -20,11 +21,19 @@ class ProxyThemAllConfigurable : Configurable {
     private val settings = ProxyThemAllSettings.getInstance()
     private var originalShowStatusBarWidget: Boolean = settings.showStatusBarWidget
 
+    // Store original values to detect changes in ProxyThemAll settings
+    private var originalShowNotifications: Boolean = settings.showNotifications
+    private var originalApplyProxyToGit: Boolean = settings.applyProxyToGit
+    private var originalEnableGradleProxySupport: Boolean = settings.enableGradleProxySupport
+
     override fun getDisplayName(): String = "ProxyThemAll"
 
     override fun createComponent(): JComponent {
-        // Store the original value when the component is created
+        // Store all original values when the component is created
         originalShowStatusBarWidget = settings.showStatusBarWidget
+        originalShowNotifications = settings.showNotifications
+        originalApplyProxyToGit = settings.applyProxyToGit
+        originalEnableGradleProxySupport = settings.enableGradleProxySupport
 
         settingsComponent = panel {
             group("Notifications") {
@@ -70,8 +79,23 @@ class ProxyThemAllConfigurable : Configurable {
     override fun apply() {
         settingsComponent?.apply()
 
+        // Check if any ProxyThemAll settings have changed
+        val proxySettingsChanged = originalShowNotifications != settings.showNotifications ||
+                originalApplyProxyToGit != settings.applyProxyToGit ||
+                originalEnableGradleProxySupport != settings.enableGradleProxySupport
+
         // Check if the status bar widget visibility setting has changed
         val widgetVisibilityChanged = originalShowStatusBarWidget != settings.showStatusBarWidget
+
+        // If any proxy-related settings changed, perform cleanup and reapplication
+        if (proxySettingsChanged) {
+            ApplicationManager.getApplication().invokeLater {
+                // Trigger cleanup and reapplication of proxy settings for all open projects
+                // This ensures a clean state and respects the new settings across all projects
+                // The Git and Gradle services will now automatically clean up when features are disabled
+                ProxyController.instance.cleanupAndReapplyProxySettings()
+            }
+        }
 
         // Update status bar widgets in all open projects when settings change
         updateStatusBarWidgets()
@@ -84,8 +108,11 @@ class ProxyThemAllConfigurable : Configurable {
             )
         }
 
-        // Update the original value for future comparisons
+        // Update all original values for future comparisons
         originalShowStatusBarWidget = settings.showStatusBarWidget
+        originalShowNotifications = settings.showNotifications
+        originalApplyProxyToGit = settings.applyProxyToGit
+        originalEnableGradleProxySupport = settings.enableGradleProxySupport
     }
 
     private fun updateStatusBarWidgets() {
