@@ -130,21 +130,6 @@ class ProxyThemAllConfigurable : Configurable {
         settingsComponent?.reset()
     }
 
-    /**
-     * Handles cleanup when specific features are disabled in settings
-     */
-    private fun handleFeatureDisabling() {
-        // If Git proxy was disabled, clean up Git proxy settings
-        if (originalApplyProxyToGit && !settings.applyProxyToGit) {
-            ProxyController.instance.cleanupDisabledFeature("git")
-        }
-
-        // If Gradle proxy was disabled, clean up Gradle proxy settings
-        if (originalEnableGradleProxySupport && !settings.enableGradleProxySupport) {
-            ProxyController.instance.cleanupDisabledFeature("gradle")
-        }
-    }
-
     override fun disposeUIResources() {
         settingsComponent = null
     }
