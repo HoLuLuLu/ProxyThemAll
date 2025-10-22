@@ -8,38 +8,41 @@
 ## Description
 
 <!-- Plugin description -->
-__ProxyThemAll__ is an IntelliJ IDEA plugin that makes it easy to toggle proxy settings on and off with just one click,
-including automatic Git and Gradle proxy synchronization with multi-project support and intelligent state management.
+__ProxyThemAll__ is an IntelliJ IDEA plugin that provides one-click proxy management with automatic synchronization
+across development tools.
 
 __Key Features:__
 
-- __Quick proxy toggle__: Switch proxy on/off instantly from the Tools menu or status bar
-- __Automatic proxy reset__: Automatically cleans up and reapplies proxy settings on IDE startup and when settings
-  change
-- __Git integration__: Automatically synchronizes Git proxy settings with IDE proxy configuration, including URL
-  encoding for credentials and non-proxy hosts support
-- __Gradle integration (Experimental)__: Automatically configures Gradle proxy settings using JVM system properties and
-  gradle.properties file
-- __Multi-project support__: Proxy configuration changes apply to all open projects simultaneously
-- __Intelligent state management__: Monitors IntelliJ's built-in proxy settings and maintains consistent state
+- __One-click proxy toggle__: Enable or disable proxy settings instantly through the Tools menu or status bar widget
+- __Git integration__: Automatically configures Git proxy settings (http.proxy, https.proxy) with support for
+  authentication and non-proxy hosts
+- __Gradle integration__: Configures Gradle proxy settings via JVM system properties and gradle.properties files (
+  optional, disabled by default)
+- __Multi-project support__: Applies proxy configuration changes to all open projects simultaneously
+- __Intelligent cleanup__: Automatically removes proxy settings when disabled and reapplies them during IDE startup
+- __Status bar widget__: Optional clickable widget showing current proxy state with visual indicators
+- __Settings management__: Configurable options for notifications, status bar widget, Git integration, and Gradle
+  support
 - __Non-proxy hosts support__: Automatically handles hosts that should bypass proxy settings for both Git and Gradle
-- __Visual status indicator__: See your current proxy state at a glance in the status bar
-- __Smart memory__: Remembers your proxy settings when you turn them off, so you can easily turn them back on
-- __Helpful notifications__: Get notified when proxy state changes or when configuration is needed
-- __Easy setup__: Works with your existing IDE proxy settings - no additional configuration required
+- __Authentication support__: Handles proxy credentials with proper URL encoding for Git configuration
 
-__Perfect for developers who:__
+__Configuration Options:__
 
-- Work from different locations (office with corporate proxy vs. home without)
-- Need to quickly test applications with and without proxy
-- Want Git and Gradle operations to work seamlessly with their proxy setup across multiple projects
-- Want to avoid manually configuring proxy settings in multiple places (IDE, Git, Gradle)
-- Have complex proxy setups with non-proxy hosts or special characters in credentials
-- Work with multiple projects simultaneously and need consistent proxy configuration
-- Prefer visual indicators and one-click solutions
+- Enable/disable notifications for proxy state changes
+- Show/hide status bar widget
+- Enable/disable Git proxy synchronization
+- Enable/disable Gradle proxy support (experimental)
 
-The plugin adds a simple toggle action to your Tools menu and an optional status bar widget, making proxy management
-effortless and keeping you focused on your development work.
+__Target Users:__
+
+- Developers switching between office (corporate proxy) and home (direct connection) environments
+- Teams working with corporate proxies who need frequent proxy toggling
+- Developers wanting consistent proxy configuration across IntelliJ IDEA, Git, and Gradle
+- Users managing multiple projects who need synchronized proxy settings
+
+The plugin uses IntelliJ IDEA's existing proxy configuration and adds toggle functionality accessible through the Tools
+menu and an optional status bar widget. Git integration is enabled by default, while Gradle integration is optional and
+can be enabled in settings.
 <!-- Plugin description end -->
 
 ## Project Structure
@@ -89,6 +92,7 @@ The project also includes comprehensive test coverage in `src/test/kotlin/` with
 - `TestUtils.kt` - Common test utilities and helper functions
 - Test classes mirroring the main source structure for all core components
 - Dedicated test suites for Git and Gradle proxy configuration functionality
+- `ProxyThemAllConfigurableTest.kt` - Tests for settings UI and feature cleanup functionality
 
 ## Installation
 

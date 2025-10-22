@@ -28,6 +28,15 @@
     - ProxyThemAllConfigurable now triggers cleanup when Git integration, Gradle integration, or notification settings
       change
     - Immediate effect of setting changes across all open projects
+  - Automatic cleanup of proxy settings when individual features (Git/Gradle) are disabled in settings
+
+### Fixed
+
+- **Feature Disabling Issue**
+    - Fixed issue where disabling Git or Gradle proxy support in settings would not remove existing proxy configurations
+    - GitProxyService and GradleProxyService now automatically clean up proxy settings when their respective features
+      are disabled
+    - Users no longer need to disable the entire proxy to clean up individual feature settings
 
 ### Technical Details
 
