@@ -476,4 +476,46 @@ class ProxyController {
             LOG.warn("Failed to cleanup Gradle proxy settings for project ${project.name}", e)
         }
     }
+
+    /**
+     * Cleans up proxy settings for a specific disabled feature across all open projects
+     *
+     * @param feature The feature to clean up ("git" or "gradle")
+     */
+    fun cleanupDisabledFeature(feature: String) {
+        try {
+            LOG.info("Cleaning up disabled feature: $feature")
+
+            val openProjects = com.intellij.openapi.project.ProjectManager.getInstance().openProjects.toList()
+            LOG.debug("Cleaning up $feature proxy settings for ${openProjects.size} open projects")
+
+            openProjects.forEach { project ->
+                try {
+                    when (feature.lowercase()) {
+                        "git" -> {
+                            gitProxyService.removeGitProxySettings(project) { status ->
+                                LOG.debug("Git proxy cleanup for ${project.name}: $status")
+                            }
+                        }
+
+                        "gradle" -> {
+                            gradleProxyService.removeGradleProxySettings(project) { status ->
+                                LOG.debug("Gradle proxy cleanup for ${project.name}: $status")
+                            }
+                        }
+
+                        else -> {
+                            LOG.warn("Unknown feature for cleanup: $feature")
+                        }
+                    }
+                } catch (e: Exception) {
+                    LOG.warn("Failed to cleanup $feature proxy settings for project ${project.name}", e)
+                }
+            }
+
+            LOG.info("Completed cleanup for disabled feature: $feature")
+        } catch (e: Exception) {
+            LOG.error("Failed to cleanup disabled feature: $feature", e)
+        }
+    }
 }

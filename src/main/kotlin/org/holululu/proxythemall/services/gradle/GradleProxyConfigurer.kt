@@ -223,7 +223,7 @@ class GradleProxyConfigurer {
         for (i in lines.indices) {
             val line = lines[i].trim()
             if (line == PROXY_SECTION_START) {
-                startIndex = i
+                startIndex = i - 1
             } else if (line == PROXY_SECTION_END && startIndex != -1) {
                 endIndex = i
                 break

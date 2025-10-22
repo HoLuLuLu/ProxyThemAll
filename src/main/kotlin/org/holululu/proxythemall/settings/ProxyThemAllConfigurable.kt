@@ -92,6 +92,7 @@ class ProxyThemAllConfigurable : Configurable {
             ApplicationManager.getApplication().invokeLater {
                 // Trigger cleanup and reapplication of proxy settings for all open projects
                 // This ensures a clean state and respects the new settings across all projects
+                // The Git and Gradle services will now automatically clean up when features are disabled
                 ProxyController.instance.cleanupAndReapplyProxySettings()
             }
         }
@@ -127,6 +128,21 @@ class ProxyThemAllConfigurable : Configurable {
 
     override fun reset() {
         settingsComponent?.reset()
+    }
+
+    /**
+     * Handles cleanup when specific features are disabled in settings
+     */
+    private fun handleFeatureDisabling() {
+        // If Git proxy was disabled, clean up Git proxy settings
+        if (originalApplyProxyToGit && !settings.applyProxyToGit) {
+            ProxyController.instance.cleanupDisabledFeature("git")
+        }
+
+        // If Gradle proxy was disabled, clean up Gradle proxy settings
+        if (originalEnableGradleProxySupport && !settings.enableGradleProxySupport) {
+            ProxyController.instance.cleanupDisabledFeature("gradle")
+        }
     }
 
     override fun disposeUIResources() {
