@@ -2,7 +2,7 @@ package org.holululu.proxythemall.services
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.startup.StartupActivity
+import com.intellij.openapi.startup.ProjectActivity
 import org.holululu.proxythemall.listeners.HttpProxySettingsChangeListener
 
 /**
@@ -11,13 +11,13 @@ import org.holululu.proxythemall.listeners.HttpProxySettingsChangeListener
  * This activity is executed after the IDE startup is complete and ensures that
  * the HttpProxySettingsChangeListener is properly registered with the ProxyStateChangeManager.
  */
-class ProxyThemAllStartupActivity : StartupActivity {
+class ProxyThemAllStartupActivity : ProjectActivity {
 
     companion object {
         private val LOG = Logger.getInstance(ProxyThemAllStartupActivity::class.java)
     }
 
-    override fun runActivity(project: Project) {
+    override suspend fun execute(project: Project) {
         try {
             LOG.info("Initializing ProxyThemAll plugin via startup activity")
 
