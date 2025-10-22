@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+## [0.0.5] 2025-10-22
+
+(includes v0.0.4)
 ### Added
 
 - **Automatic Proxy Reset on Settings Changes**
