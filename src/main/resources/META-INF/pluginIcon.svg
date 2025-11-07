@@ -20,32 +20,36 @@
             <stop offset="60%" stop-color="#4B535B"/>
             <stop offset="100%" stop-color="#98A1AB"/>
         </linearGradient>
-        <!-- Spark/glint shape -->
-        <g id="glint">
-            <path d="M0,-6 L0,6 M-6,0 L6,0" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-            <path d="M0,-10 L0,10 M-10,0 L10,0" stroke="#FFE78A" stroke-width="1.5" stroke-linecap="round" opacity="0.9"
-                  fill="none"/>
-        </g>
         <!-- Clip so the chain never touches the ring (keeps a clean gap) -->
         <clipPath id="holeClip" clipPathUnits="userSpaceOnUse">
             <circle cx="250" cy="250" r="105"/>
         </clipPath>
+        <!-- Split along the global diagonal from top-right (420,80) to bottom-left (80,420) -->
+        <clipPath id="splitTR" clipPathUnits="userSpaceOnUse">
+            <!-- Region x + y <= 506 (above the diagonal with better overlap) -->
+            <polygon points="80,80 420,80 80,420"/>
+        </clipPath>
     </defs>
 
-    <!-- Two links aligned along the top-right to bottom-left diagonal, clipped so they don't touch the ring -->
+    <!-- Two links, with Link A split into two halves across the diagonal for interlocking illusion -->
     <g clip-path="url(#holeClip)">
-        <g transform="rotate(-45 250 250)">
-            <!-- Link A (darker gradient) -->
-            <g transform="translate(-52 0)">
-                <rect x="165" y="209" width="170" height="82" rx="41" ry="41"
-                      fill="none" stroke="url(#steel)" stroke-width="24" stroke-linecap="round"
-                      stroke-linejoin="round"/>
-                <rect x="165" y="209" width="170" height="82" rx="41" ry="41"
-                      fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="6" stroke-linecap="round"
-                      stroke-linejoin="round"
-                      transform="translate(0,-3)"/>
+        <!-- Link A UNDER half (no clipping, full visibility) -->
+        <g>
+            <g transform="rotate(-45 250 250)">
+                <g transform="translate(-52 0)">
+                    <rect x="165" y="209" width="170" height="82" rx="41" ry="41"
+                          fill="none" stroke="url(#steel)" stroke-width="24" stroke-linecap="round"
+                          stroke-linejoin="round"/>
+                    <rect x="165" y="209" width="170" height="82" rx="41" ry="41"
+                          fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="6" stroke-linecap="round"
+                          stroke-linejoin="round"
+                          transform="translate(0,-3)"/>
+                </g>
             </g>
-            <!-- Link B (darker gradient; same orientation as Link A) -->
+        </g>
+
+        <!-- Link B (entire) -->
+        <g transform="rotate(-45 250 250)">
             <g transform="translate(52 0)">
                 <rect x="165" y="209" width="170" height="82" rx="41" ry="41"
                       fill="none" stroke="url(#steel)" stroke-width="24" stroke-linecap="round"
@@ -56,6 +60,21 @@
                       transform="translate(0,-3)"/>
             </g>
         </g>
+
+        <!-- Link A OVER half (top-right of diagonal) -->
+        <g clip-path="url(#splitTR)">
+            <g transform="rotate(-45 250 250)">
+                <g transform="translate(-52 0)">
+                    <rect x="165" y="209" width="170" height="82" rx="41" ry="41"
+                          fill="none" stroke="url(#steel)" stroke-width="24" stroke-linecap="round"
+                          stroke-linejoin="round"/>
+                    <rect x="165" y="209" width="170" height="82" rx="41" ry="41"
+                          fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="6" stroke-linecap="round"
+                          stroke-linejoin="round"
+                          transform="translate(0,-3)"/>
+                </g>
+            </g>
+    </g>
     </g>
 
     <!-- Golden ring (outer outline removed; background transparent) -->
