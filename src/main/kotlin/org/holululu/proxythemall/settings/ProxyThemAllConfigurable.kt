@@ -25,6 +25,7 @@ class ProxyThemAllConfigurable : Configurable {
     private var originalShowNotifications: Boolean = settings.showNotifications
     private var originalApplyProxyToGit: Boolean = settings.applyProxyToGit
     private var originalEnableGradleProxySupport: Boolean = settings.enableGradleProxySupport
+    private var originalEnableGradleGlobalFallback: Boolean = settings.enableGradleGlobalFallback
 
     override fun getDisplayName(): String = "ProxyThemAll"
 
@@ -34,6 +35,7 @@ class ProxyThemAllConfigurable : Configurable {
         originalShowNotifications = settings.showNotifications
         originalApplyProxyToGit = settings.applyProxyToGit
         originalEnableGradleProxySupport = settings.enableGradleProxySupport
+        originalEnableGradleGlobalFallback = settings.enableGradleGlobalFallback
 
         settingsComponent = panel {
             group("Notifications") {
@@ -66,6 +68,11 @@ class ProxyThemAllConfigurable : Configurable {
                         .bindSelected(settings::enableGradleProxySupport)
                         .comment("Enable proxy configuration for Gradle builds")
                 }
+                row {
+                    checkBox("Allow global Gradle configuration fallback")
+                        .bindSelected(settings::enableGradleGlobalFallback)
+                        .comment("Apply proxy to global ~/.gradle/gradle.properties when project doesn't have gradle.properties")
+                }
             }
         }
 
@@ -82,7 +89,8 @@ class ProxyThemAllConfigurable : Configurable {
         // Check if any ProxyThemAll settings have changed
         val proxySettingsChanged = originalShowNotifications != settings.showNotifications ||
                 originalApplyProxyToGit != settings.applyProxyToGit ||
-                originalEnableGradleProxySupport != settings.enableGradleProxySupport
+                originalEnableGradleProxySupport != settings.enableGradleProxySupport ||
+                originalEnableGradleGlobalFallback != settings.enableGradleGlobalFallback
 
         // Check if the status bar widget visibility setting has changed
         val widgetVisibilityChanged = originalShowStatusBarWidget != settings.showStatusBarWidget
@@ -113,6 +121,7 @@ class ProxyThemAllConfigurable : Configurable {
         originalShowNotifications = settings.showNotifications
         originalApplyProxyToGit = settings.applyProxyToGit
         originalEnableGradleProxySupport = settings.enableGradleProxySupport
+        originalEnableGradleGlobalFallback = settings.enableGradleGlobalFallback
     }
 
     private fun updateStatusBarWidgets() {

@@ -4,6 +4,41 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Gradle Global Fallback Setting**
+    - New setting to control Gradle proxy behavior for non-Gradle projects
+    - When enabled (default): applies proxy to global ~/.gradle/gradle.properties for non-Gradle projects
+    - When disabled: skips Gradle proxy configuration entirely for non-Gradle projects
+    - Configurable in Settings → Tools → ProxyThemAll
+
+- **ProxyThemAll Changelist Management**
+    - Gradle proxy file modifications now automatically go to dedicated "ProxyThemAll" changelist
+    - Prevents accidental commit of proxy credentials and configuration
+    - Changelist is automatically created with descriptive message
+    - User's active changelist is preserved during proxy operations
+
+### Changed
+
+- **Smart Gradle Project Detection**
+    - Gradle proxy configuration now only applies to actual Gradle projects
+    - Detects Gradle projects by presence of build.gradle, build.gradle.kts, settings.gradle, or settings.gradle.kts
+    - Non-Gradle projects use global fallback setting (if enabled) or skip Gradle configuration
+    - Prevents unnecessary proxy configuration in non-Gradle projects
+
+- **Enhanced VCS Integration**
+    - File modifications now use WriteCommandAction + VirtualFile for proper VCS notification
+    - Both proxy addition and removal properly tracked by version control
+    - Improved changelist management with EDT-safe operations
+
+### Fixed
+
+- **Automatic Changelist Cleanup**
+    - ProxyThemAll changelist is automatically deleted when proxy is disabled (if empty)
+    - Safety check prevents deletion if changelist contains other changes
+    - Proper VCS notification ensures changelist state is correctly updated
+    - Delayed cleanup allows VCS to process file changes before changelist removal
+
 ## [0.0.5] 2025-10-22
 
 (includes v0.0.4)

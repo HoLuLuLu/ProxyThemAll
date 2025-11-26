@@ -16,8 +16,8 @@ __Key Features:__
 - __One-click proxy toggle__: Enable or disable proxy settings instantly through the Tools menu or status bar widget
 - __Git integration__: Automatically configures Git proxy settings (http.proxy, https.proxy) with support for
   authentication and non-proxy hosts
-- __Gradle integration__: Configures Gradle proxy settings via JVM system properties and gradle.properties files (
-  optional, disabled by default)
+- __Gradle integration__: Configures Gradle proxy settings via JVM system properties and gradle.properties files with
+  smart project detection (optional, disabled by default)
 - __Multi-project support__: Applies proxy configuration changes to all open projects simultaneously
 - __Intelligent cleanup__: Automatically removes proxy settings when disabled and reapplies them during IDE startup
 - __Status bar widget__: Optional clickable widget showing current proxy state with visual indicators
@@ -32,6 +32,18 @@ __Configuration Options:__
 - Show/hide status bar widget
 - Enable/disable Git proxy synchronization
 - Enable/disable Gradle proxy support (experimental)
+- Configure Gradle global fallback behavior for non-Gradle projects
+
+__Gradle-Specific Features:__
+
+- __Smart project detection__: Automatically detects Gradle projects and only applies Gradle proxy to actual Gradle
+  projects
+- __Global fallback setting__: Configurable behavior for non-Gradle projects (apply to global ~
+  /.gradle/gradle.properties
+  or skip)
+- __ProxyThemAll changelist__: Gradle configuration changes are automatically placed in a dedicated VCS changelist to
+  prevent accidental commits of proxy credentials
+- __Automatic cleanup__: ProxyThemAll changelist is automatically removed when proxy is disabled (if empty)
 
 __Target Users:__
 
@@ -73,11 +85,11 @@ src/main/kotlin/org/holululu/proxythemall/
 │   │   ├── GitProxyConfigurer.kt      # Git proxy configuration management
 │   │   └── GitProxyService.kt         # Git-specific proxy operations
 │   └── gradle/
-│       ├── GradleProxyConfigurer.kt   # Gradle proxy configuration management
-│       └── GradleProxyService.kt      # Gradle-specific proxy operations
+│       ├── GradleProxyConfigurer.kt   # Gradle proxy config with VCS changelist management
+│       └── GradleProxyService.kt      # Gradle project detection and proxy operations
 ├── settings/
 │   ├── ProxyThemAllConfigurable.kt    # Settings UI configuration
-│   └── ProxyThemAllSettings.kt        # Settings persistence
+│   └── ProxyThemAllSettings.kt        # Settings persistence (includes global fallback option)
 ├── utils/
 │   ├── NotificationMessages.kt        # Notification message templates
 │   └── ProxyUrlBuilder.kt             # Utility for building proxy URLs

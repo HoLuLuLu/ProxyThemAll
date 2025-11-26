@@ -1,10 +1,16 @@
 package org.holululu.proxythemall.services.gradle
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vcs.changes.ChangeListManager
+import com.intellij.openapi.vfs.LocalFileSystem
 import org.holululu.proxythemall.models.ProxyInfo
+import org.holululu.proxythemall.settings.ProxyThemAllSettings
 import java.io.File
 
 private const val GRADLE_HOSTS_SEPERATOR = "|"
@@ -22,6 +28,7 @@ class GradleProxyConfigurer {
         val instance: GradleProxyConfigurer by lazy { GradleProxyConfigurer() }
 
         private val LOG = Logger.getInstance(GradleProxyConfigurer::class.java)
+        private val settings = ProxyThemAllSettings.getInstance()
 
         // Gradle proxy properties - using JVM system properties approach
         private const val HTTP_PROXY_HOST = "systemProp.http.proxyHost"
@@ -47,6 +54,22 @@ class GradleProxyConfigurer {
     }
 
     /**
+     * Checks if the given project is a Gradle project by looking for Gradle build files
+     */
+    private fun isGradleProject(project: Project?): Boolean {
+        if (project == null) return false
+
+        val basePath = project.basePath ?: return false
+        val baseDir = File(basePath)
+
+        // Check for Gradle build files
+        return baseDir.resolve("build.gradle").exists() ||
+                baseDir.resolve("build.gradle.kts").exists() ||
+                baseDir.resolve("settings.gradle").exists() ||
+                baseDir.resolve("settings.gradle.kts").exists()
+    }
+
+    /**
      * Sets proxy for Gradle using extracted proxy information with direct credential support
      * Returns a status message for inclusion in notifications
      */
@@ -55,29 +78,54 @@ class GradleProxyConfigurer {
         object : Task.Backgroundable(project, "Configuring Gradle Proxy", false) {
             override fun run(indicator: ProgressIndicator) {
                 try {
-                    val gradlePropertiesFile = getGradlePropertiesFile(project)
-                    if (gradlePropertiesFile != null) {
-                        configureProjectGradleProperties(gradlePropertiesFile, proxyInfo)
+                    // Check if this is a Gradle project
+                    val isGradle = isGradleProject(project)
 
-                        val statusMessage = if (hasCredentials(proxyInfo)) {
-                            "configured for project with authentication"
+                    if (isGradle) {
+                        // It's a Gradle project - apply to project gradle.properties
+                        val gradlePropertiesFile = getGradlePropertiesFile(project)
+                        if (gradlePropertiesFile != null) {
+                            configureProjectGradleProperties(project, gradlePropertiesFile, proxyInfo)
+
+                            val statusMessage = if (hasCredentials(proxyInfo)) {
+                                "configured for project with authentication"
+                            } else {
+                                "configured for project"
+                            }
+
+                            LOG.info("Gradle proxy configured for Gradle project: ${proxyInfo.host}:${proxyInfo.port}")
+                            onComplete(statusMessage)
                         } else {
-                            "configured for project"
+                            // Gradle project but no gradle.properties file exists yet - create it
+                            val newGradlePropertiesFile = project?.basePath?.let { File(it, "gradle.properties") }
+                            if (newGradlePropertiesFile != null) {
+                                configureProjectGradleProperties(project, newGradlePropertiesFile, proxyInfo)
+                                LOG.info("Gradle proxy configured for Gradle project (created gradle.properties): ${proxyInfo.host}:${proxyInfo.port}")
+                                onComplete("configured for project")
+                            } else {
+                                LOG.warn("Could not create gradle.properties for Gradle project")
+                                onComplete("configuration failed - could not create gradle.properties")
+                            }
                         }
-                        
-                        LOG.info("Gradle proxy configured for project: ${proxyInfo.host}:${proxyInfo.port}")
-                        onComplete(statusMessage)
                     } else {
-                        configureGlobalGradleProperties(proxyInfo)
+                        // Not a Gradle project - check if global fallback is enabled
+                        if (settings.enableGradleGlobalFallback) {
+                            // Global fallback is enabled - apply to global gradle.properties
+                            configureGlobalGradleProperties(proxyInfo)
 
-                        val statusMessage = if (hasCredentials(proxyInfo)) {
-                            "configured globally with authentication"
+                            val statusMessage = if (hasCredentials(proxyInfo)) {
+                                "configured globally with authentication"
+                            } else {
+                                "configured globally"
+                            }
+
+                            LOG.info("Gradle proxy configured globally (not a Gradle project, fallback enabled): ${proxyInfo.host}:${proxyInfo.port}")
+                            onComplete(statusMessage)
                         } else {
-                            "configured globally"
+                            // Global fallback is disabled - skip configuration
+                            LOG.info("Skipping Gradle proxy configuration (not a Gradle project, fallback disabled)")
+                            onComplete("not a Gradle project - skipped")
                         }
-                        
-                        LOG.info("Gradle proxy configured globally: ${proxyInfo.host}:${proxyInfo.port}")
-                        onComplete(statusMessage)
                     }
                 } catch (e: Exception) {
                     LOG.error("Failed to set Gradle proxy", e)
@@ -95,31 +143,40 @@ class GradleProxyConfigurer {
         object : Task.Backgroundable(project, "Removing Gradle Proxy", false) {
             override fun run(indicator: ProgressIndicator) {
                 try {
-                    var removedAny = false
+                    // Check if this is a Gradle project
+                    val isGradle = isGradleProject(project)
 
-                    // First try to remove project-level settings
-                    val gradlePropertiesFile = getGradlePropertiesFile(project)
-                    if (gradlePropertiesFile != null && gradlePropertiesFile.exists() && removeProxyPropertiesFromFile(
-                            gradlePropertiesFile
-                        )
-                    ) {
-                        LOG.info("Project-level Gradle proxy settings removed")
-                        removedAny = true
-                        onComplete("proxy removed from project")
-                    }
+                    if (isGradle) {
+                        // It's a Gradle project - remove from project gradle.properties
+                        val gradlePropertiesFile = getGradlePropertiesFile(project)
+                        if (gradlePropertiesFile != null && gradlePropertiesFile.exists()) {
+                            // Use VFS for proper removal like we do for adding
+                            removeProjectGradleProxyProperties(project, gradlePropertiesFile)
 
-                    // If no project-level settings were removed, try global settings
-                    if (!removedAny) {
-                        val globalGradlePropertiesFile = getGlobalGradlePropertiesFile()
-                        if (globalGradlePropertiesFile.exists()) {
-                            if (removeProxyPropertiesFromFile(globalGradlePropertiesFile)) {
-                                LOG.info("Global Gradle proxy settings removed")
-                                onComplete("proxy removed globally")
+                            LOG.info("Project-level Gradle proxy settings removed")
+                            onComplete("proxy removed from project")
+                        } else {
+                            onComplete("no proxy settings found")
+                        }
+                    } else {
+                        // Not a Gradle project - check if global fallback is enabled
+                        if (settings.enableGradleGlobalFallback) {
+                            // Global fallback is enabled - remove from global gradle.properties
+                            val globalGradlePropertiesFile = getGlobalGradlePropertiesFile()
+                            if (globalGradlePropertiesFile.exists()) {
+                                if (removeProxyPropertiesFromFile(globalGradlePropertiesFile)) {
+                                    LOG.info("Global Gradle proxy settings removed")
+                                    onComplete("proxy removed globally")
+                                } else {
+                                    onComplete("no proxy settings found")
+                                }
                             } else {
                                 onComplete("no proxy settings found")
                             }
                         } else {
-                            onComplete("no proxy settings found")
+                            // Global fallback is disabled - nothing to remove
+                            LOG.info("Skipping Gradle proxy removal (not a Gradle project, fallback disabled)")
+                            onComplete("not a Gradle project - skipped")
                         }
                     }
                 } catch (e: Exception) {
@@ -128,6 +185,73 @@ class GradleProxyConfigurer {
                 }
             }
         }.queue()
+    }
+
+    /**
+     * Removes proxy properties from project gradle.properties using VFS
+     */
+    private fun removeProjectGradleProxyProperties(project: Project?, gradlePropertiesFile: File) {
+        project?.let { p ->
+            // Read and prepare the content without proxy settings
+            val existingContent = if (gradlePropertiesFile.exists() && gradlePropertiesFile.length() > 0) {
+                gradlePropertiesFile.readText()
+            } else {
+                ""
+            }
+
+            val contentWithoutProxy = removeProxyThemAllSection(existingContent)
+
+            // Do the file modification on EDT using WriteCommandAction
+            ApplicationManager.getApplication().invokeLater({
+                try {
+                    val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(gradlePropertiesFile)
+
+                    virtualFile?.let { vf ->
+                        // Use WriteCommandAction to modify the file - this properly notifies VCS
+                        WriteCommandAction.runWriteCommandAction(p) {
+                            vf.setBinaryContent(contentWithoutProxy.toByteArray())
+                            LOG.info("Removed proxy settings using WriteCommandAction")
+                        }
+
+                        // Schedule changelist cleanup with a delay to let VCS process the change
+                        ApplicationManager.getApplication().invokeLater({
+                            deleteProxyThemAllChangelistIfEmpty(project)
+                        }, ModalityState.defaultModalityState())
+                    }
+                } catch (e: Exception) {
+                    LOG.error("Failed to remove proxy settings with VFS", e)
+                }
+            }, ModalityState.defaultModalityState())
+        } ?: run {
+            // No project context, use direct file I/O
+            removeProxyPropertiesFromFile(gradlePropertiesFile)
+        }
+    }
+
+    /**
+     * Deletes the ProxyThemAll changelist if it exists and has no changes
+     */
+    private fun deleteProxyThemAllChangelistIfEmpty(project: Project?) {
+        project?.let { p ->
+            ApplicationManager.getApplication().invokeLater({
+                try {
+                    val changeListManager = ChangeListManager.getInstance(p)
+                    val proxyChangelist = changeListManager.findChangeList("ProxyThemAll")
+
+                    proxyChangelist?.let { changelist ->
+                        // Only delete if the changelist is empty (no changes in it)
+                        if (changelist.changes.isEmpty()) {
+                            changeListManager.removeChangeList(changelist)
+                            LOG.info("Deleted empty ProxyThemAll changelist")
+                        } else {
+                            LOG.info("ProxyThemAll changelist not deleted because it contains changes")
+                        }
+                    }
+                } catch (e: Exception) {
+                    LOG.warn("Failed to delete ProxyThemAll changelist", e)
+                }
+            }, ModalityState.defaultModalityState())
+        }
     }
 
     /**
@@ -158,8 +282,117 @@ class GradleProxyConfigurer {
     /**
      * Configures project-level gradle.properties file
      */
-    private fun configureProjectGradleProperties(gradlePropertiesFile: File, proxyInfo: ProxyInfo) {
-        configureGradlePropertiesFile(gradlePropertiesFile, proxyInfo)
+    private fun configureProjectGradleProperties(project: Project?, gradlePropertiesFile: File, proxyInfo: ProxyInfo) {
+        project?.let { p ->
+            // Prepare the new content
+            val newContent = buildGradlePropertiesContent(gradlePropertiesFile, proxyInfo)
+
+            // Do EVERYTHING on EDT using WriteCommandAction
+            ApplicationManager.getApplication().invokeLater({
+                try {
+                    val changeListManager = ChangeListManager.getInstance(p)
+                    val originalActiveList = changeListManager.defaultChangeList
+
+                    // Find or create ProxyThemAll changelist
+                    var proxyChangelist = changeListManager.findChangeList("ProxyThemAll")
+                    if (proxyChangelist == null) {
+                        proxyChangelist = changeListManager.addChangeList(
+                            "ProxyThemAll",
+                            "Proxy configuration changes managed by ProxyThemAll plugin. Do not commit these changes."
+                        )
+                        LOG.info("Created ProxyThemAll changelist")
+                    }
+
+                    // Switch to ProxyThemAll as active BEFORE modifying file
+                    changeListManager.defaultChangeList = proxyChangelist
+                    LOG.info("Switched to ProxyThemAll changelist as active")
+
+                    try {
+                        // Get or create the virtual file
+                        var virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(gradlePropertiesFile)
+                        if (virtualFile == null) {
+                            // File doesn't exist, create it first
+                            gradlePropertiesFile.createNewFile()
+                            virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(gradlePropertiesFile)
+                        }
+
+                        virtualFile?.let { vf ->
+                            // Use WriteCommandAction to modify the file - this is the proper IntelliJ way
+                            WriteCommandAction.runWriteCommandAction(p) {
+                                vf.setBinaryContent(newContent.toByteArray())
+                                LOG.info("Modified gradle.properties using WriteCommandAction while ProxyThemAll is active")
+                            }
+                        }
+                    } finally {
+                        // Always restore original active changelist
+                        changeListManager.defaultChangeList = originalActiveList
+                        LOG.info("Restored original active changelist")
+                    }
+                } catch (e: Exception) {
+                    LOG.error("Failed to configure gradle.properties with changelist management", e)
+                }
+            }, ModalityState.defaultModalityState())
+        } ?: run {
+            // No project context, just modify the file normally
+            configureGradlePropertiesFile(gradlePropertiesFile, proxyInfo)
+        }
+    }
+
+    /**
+     * Builds the complete gradle.properties file content
+     */
+    private fun buildGradlePropertiesContent(gradlePropertiesFile: File, proxyInfo: ProxyInfo): String {
+        // Read existing content if file exists
+        val existingContent = if (gradlePropertiesFile.exists() && gradlePropertiesFile.length() > 0) {
+            gradlePropertiesFile.readText()
+        } else {
+            ""
+        }
+
+        // Remove any existing ProxyThemAll section from the existing content
+        val contentWithoutProxy = removeProxyThemAllSection(existingContent)
+
+        // Build new proxy settings
+        val proxySettings = buildProxySettingsContent(proxyInfo)
+
+        // Combine
+        return if (contentWithoutProxy.isBlank()) {
+            proxySettings
+        } else {
+            val separator = if (contentWithoutProxy.endsWith("\n")) "\n" else "\n\n"
+            contentWithoutProxy + separator + proxySettings
+        }
+    }
+
+    /**
+     * Removes ProxyThemAll section from content string
+     */
+    private fun removeProxyThemAllSection(content: String): String {
+        if (content.isBlank()) return content
+
+        val lines = content.lines().toMutableList()
+        var startIndex = -1
+        var endIndex = -1
+
+        // Find the ProxyThemAll managed section
+        for (i in lines.indices) {
+            val line = lines[i].trim()
+            if (line == PROXY_SECTION_START) {
+                startIndex = maxOf(0, i - 1)
+            } else if (line == PROXY_SECTION_END && startIndex != -1) {
+                endIndex = i
+                break
+            }
+        }
+
+        // Remove the managed section if found
+        if (startIndex != -1 && endIndex != -1) {
+            for (i in endIndex downTo startIndex) {
+                lines.removeAt(i)
+            }
+        }
+
+        return lines.joinToString("\n")
     }
 
     /**

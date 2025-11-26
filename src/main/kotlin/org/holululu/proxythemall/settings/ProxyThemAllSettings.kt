@@ -35,6 +35,9 @@ class ProxyThemAllSettings : PersistentStateComponent<ProxyThemAllSettings> {
     // Enable Gradle proxy support
     var enableGradleProxySupport: Boolean = false
 
+    // Allow global Gradle configuration fallback
+    var enableGradleGlobalFallback: Boolean = false
+
     override fun getState(): ProxyThemAllSettings {
         return this
     }
