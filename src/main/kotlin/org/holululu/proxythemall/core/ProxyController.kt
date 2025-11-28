@@ -53,9 +53,14 @@ class ProxyController {
 
                 ProxyState.NOT_CONFIGURED -> {
                     LOG.info("Proxy not configured - showing configuration required notification")
+                    val hasStoredConfig = org.holululu.proxythemall.services.ProxyCredentialsStorage
+                        .getInstance()
+                        .hasStoredConfiguration()
+                    LOG.debug("Stored proxy configuration exists: $hasStoredConfig")
+                    
                     notificationService.showNotification(
                         project,
-                        NotificationMessages.proxyConfigurationRequired(project)
+                        NotificationMessages.proxyConfigurationRequired(project, hasStoredConfig)
                     )
                 }
             }
@@ -356,6 +361,7 @@ class ProxyController {
     /**
      * Performs cleanup of global proxy settings (IDE proxy settings)
      */
+    @Suppress("UnstableApiUsage")
     private fun performGlobalCleanup() {
         LOG.debug("Performing global proxy cleanup")
 

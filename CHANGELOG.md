@@ -6,6 +6,30 @@
 
 ### Added
 
+- **Proxy Settings Backup and Restore**
+    - Secure backup of proxy settings using IntelliJ's PasswordSafe API
+    - All proxy data (host, port, credentials, type, nonProxyHosts) stored in OS-native secure storage
+    - Automatic backup on startup when proxy is configured
+    - Automatic backup when proxy settings change
+    - Automatic restore on startup if IntelliJ forgets proxy settings
+    - User-triggered restore via notification when trying to activate proxy without configuration
+    - New ProxyCredentialsStorage service for secure credential management
+    - New ProxyRestoreService for restoring proxy settings to IntelliJ
+    - Addresses IntelliJ's known issue of losing proxy settings after restart
+
+- **Enhanced Notification Actions**
+    - "Restore Last Known Proxy Settings" button added to configuration required notification
+    - Restore action shown prominently as primary button when backup exists
+    - Conditional display: restore action only shown when stored configuration exists
+    - Improved action ordering for better user experience
+    - Fallback to HTTP Proxy Settings dialog when no backup available
+
+- **Manual Backup Management**
+    - New "Clear Stored Proxy Configuration" button in Settings → Tools → ProxyThemAll
+    - Allows users to manually delete backed-up proxy settings from secure storage
+    - Includes confirmation dialog to prevent accidental deletion
+    - Automatically resets lastKnownProxyEnabled flag when cleared
+
 - **Gradle Global Fallback Setting**
     - New setting to control Gradle proxy behavior for non-Gradle projects
     - When enabled (default): applies proxy to global ~/.gradle/gradle.properties for non-Gradle projects

@@ -13,6 +13,9 @@ across development tools.
 
 __Key Features:__
 
+- __Secure Proxy Backup & Restore__: Automatically backs up your proxy settings using OS-native secure
+  storage (macOS Keychain, Windows Credential Manager, etc.) and restores them when IntelliJ forgets them after restart.
+  Includes both automatic restore on startup and one-click manual restore via notification.
 - __One-click proxy toggle__: Enable or disable proxy settings instantly through the Tools menu or status bar widget
 - __Git integration__: Automatically configures Git proxy settings (http.proxy, https.proxy) with support for
   authentication and non-proxy hosts
@@ -77,10 +80,12 @@ src/main/kotlin/org/holululu/proxythemall/
 ├── notifications/
 │   └── NotificationService.kt         # User notification management
 ├── services/
+│   ├── ProxyCredentialsStorage.kt     # Secure proxy backup using PasswordSafe API
 │   ├── ProxyInfoExtractor.kt          # Extracts proxy information from IDE settings
+│   ├── ProxyRestoreService.kt         # Restores proxy settings from backup
 │   ├── ProxyService.kt                # Core proxy management logic
 │   ├── ProxyThemAllStartupActivity.kt # Startup activity for plugin initialization
-│   ├── ProxyThemAllStartupService.kt  # Handles plugin initialization and cleanup
+│   ├── ProxyThemAllStartupService.kt  # Handles plugin initialization, backup, and auto-restore
 │   ├── git/
 │   │   ├── GitProxyConfigurer.kt      # Git proxy configuration management
 │   │   └── GitProxyService.kt         # Git-specific proxy operations
@@ -98,13 +103,6 @@ src/main/kotlin/org/holululu/proxythemall/
     ├── ProxyStatusBarWidget.kt        # Status bar widget implementation
     └── ProxyStatusBarWidgetFactory.kt # Widget factory for IDE integration
 ```
-
-The project also includes comprehensive test coverage in `src/test/kotlin/` with:
-
-- `TestUtils.kt` - Common test utilities and helper functions
-- Test classes mirroring the main source structure for all core components
-- Dedicated test suites for Git and Gradle proxy configuration functionality
-- `ProxyThemAllConfigurableTest.kt` - Tests for settings UI and feature cleanup functionality
 
 ## Installation
 

@@ -34,8 +34,18 @@ object TestUtils {
             every { mockSettings.showStatusBarWidget } returns true
             every { mockSettings.applyProxyToGit } returns true
             every { mockSettings.enableGradleProxySupport } returns true
+            every { mockSettings.lastKnownProxyEnabled } returns false
             every { ProxyThemAllSettings.getInstance() } returns mockSettings
             every { mockApplication.getService(ProxyThemAllSettings::class.java) } returns mockSettings
+
+            // Mock ProxyCredentialsStorage
+            mockkStatic(org.holululu.proxythemall.services.ProxyCredentialsStorage::class)
+            val mockCredentialsStorage =
+                mockk<org.holululu.proxythemall.services.ProxyCredentialsStorage>(relaxed = true)
+            every { mockCredentialsStorage.hasStoredConfiguration() } returns false
+            every { mockCredentialsStorage.loadProxyConfiguration() } returns null
+            every { org.holululu.proxythemall.services.ProxyCredentialsStorage.getInstance() } returns mockCredentialsStorage
+            every { mockApplication.getService(org.holululu.proxythemall.services.ProxyCredentialsStorage::class.java) } returns mockCredentialsStorage
 
             // Mock NotificationGroupManager specifically
             mockkStatic(NotificationGroupManager::class)
@@ -68,6 +78,7 @@ object TestUtils {
             unmockkStatic(ApplicationManager::class)
             unmockkStatic(ProxySettings::class)
             unmockkStatic(ProxyThemAllSettings::class)
+            unmockkStatic(org.holululu.proxythemall.services.ProxyCredentialsStorage::class)
             unmockkStatic(NotificationGroupManager::class)
         } catch (e: Exception) {
             // If cleanup fails, just continue - this shouldn't break tests

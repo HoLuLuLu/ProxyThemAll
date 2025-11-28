@@ -38,6 +38,9 @@ class ProxyThemAllSettings : PersistentStateComponent<ProxyThemAllSettings> {
     // Allow global Gradle configuration fallback
     var enableGradleGlobalFallback: Boolean = false
 
+    // Track last known proxy enabled state (for auto-restore on startup)
+    var lastKnownProxyEnabled: Boolean = false
+
     override fun getState(): ProxyThemAllSettings {
         return this
     }

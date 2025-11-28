@@ -40,6 +40,9 @@ class HttpProxySettingsChangeListener : ProxyStateChangeListener {
 
             LOG.info("HTTP proxy settings changed, new state: $newState - triggering cleanup and reapplication for all projects")
 
+            // Handle backup to PasswordSafe based on new state
+            handleProxyBackup(newState)
+
             // Determine target state based on the new proxy state
             val targetEnabled = when (newState) {
                 ProxyState.ENABLED -> true
@@ -54,6 +57,42 @@ class HttpProxySettingsChangeListener : ProxyStateChangeListener {
             LOG.debug("Cleanup and reapplication completed for HTTP proxy settings change across all projects")
         } else {
             LOG.debug("Proxy state unchanged ($newState), skipping cleanup")
+        }
+    }
+
+    /**
+     * Handles backing up proxy configuration to PasswordSafe when state changes
+     */
+    private fun handleProxyBackup(newState: ProxyState) {
+        try {
+            val settings = org.holululu.proxythemall.settings.ProxyThemAllSettings.getInstance()
+            val credentialsStorage = org.holululu.proxythemall.services.ProxyCredentialsStorage.getInstance()
+            val proxyInfoExtractor = org.holululu.proxythemall.services.ProxyInfoExtractor.instance
+
+            when (newState) {
+                ProxyState.ENABLED -> {
+                    // Extract and backup to PasswordSafe
+                    LOG.info("Proxy enabled - backing up configuration to PasswordSafe")
+                    val proxyConfiguration = com.intellij.util.net.ProxySettings.getInstance().getProxyConfiguration()
+                    val proxyInfo = proxyInfoExtractor.extractProxyInfo(proxyConfiguration)
+
+                    if (proxyInfo != null) {
+                        credentialsStorage.saveProxyConfiguration(proxyInfo)
+                        settings.lastKnownProxyEnabled = true
+                        LOG.info("Proxy configuration backed up successfully")
+                    } else {
+                        LOG.warn("Could not extract proxy info for backup")
+                    }
+                }
+
+                ProxyState.DISABLED, ProxyState.NOT_CONFIGURED -> {
+                    // Update flag but never delete from PasswordSafe
+                    LOG.debug("Proxy disabled/not configured - updating state flag only (backup preserved)")
+                    settings.lastKnownProxyEnabled = false
+                }
+            }
+        } catch (e: Exception) {
+            LOG.error("Failed to handle proxy backup", e)
         }
     }
 

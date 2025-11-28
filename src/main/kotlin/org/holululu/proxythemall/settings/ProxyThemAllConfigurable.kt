@@ -74,6 +74,38 @@ class ProxyThemAllConfigurable : Configurable {
                         .comment("Apply proxy to global ~/.gradle/gradle.properties when project doesn't have gradle.properties")
                 }
             }
+
+            group("Proxy Backup Management") {
+                row {
+                    button("Clear Stored Proxy Configuration") {
+                        val result = Messages.showYesNoDialog(
+                            "Are you sure you want to clear the stored proxy configuration?\n\n" +
+                                    "This will permanently delete the backed-up proxy settings from secure storage.\n" +
+                                    "You will need to reconfigure your proxy manually if IntelliJ forgets it.",
+                            "Clear Stored Proxy Configuration",
+                            Messages.getWarningIcon()
+                        )
+
+                        if (result == Messages.YES) {
+                            try {
+                                org.holululu.proxythemall.services.ProxyCredentialsStorage.getInstance()
+                                    .clearStoredConfiguration()
+                                settings.lastKnownProxyEnabled = false
+
+                                Messages.showInfoMessage(
+                                    "Stored proxy configuration has been cleared successfully.",
+                                    "ProxyThemAll"
+                                )
+                            } catch (e: Exception) {
+                                Messages.showErrorDialog(
+                                    "Failed to clear stored proxy configuration: ${e.message}",
+                                    "ProxyThemAll - Error"
+                                )
+                            }
+                        }
+                    }.comment("Remove backed-up proxy settings from secure storage")
+                }
+            }
         }
 
         return settingsComponent!!
