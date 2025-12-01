@@ -5,10 +5,7 @@ import com.intellij.openapi.application.Application
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.util.net.ProxyConfiguration
 import com.intellij.util.net.ProxySettings
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
+import io.mockk.*
 import org.holululu.proxythemall.settings.ProxyThemAllSettings
 
 /**
@@ -22,9 +19,26 @@ object TestUtils {
     fun setupMockIntellijEnvironment() {
         // Minimal mocking approach to avoid mockk 1.14.6 issues
         try {
+            // Clear any existing mocks
+            clearAllMocks()
+            
             // Only mock the most essential static methods
             mockkStatic(ApplicationManager::class)
-            val mockApplication = mockk<Application>(relaxed = true)
+
+            // Create a NON-relaxed Application mock and set up behaviors explicitly
+            val mockApplication = mockk<Application>()
+
+            // Set up executeOnPooledThread FIRST before anything else
+            every { mockApplication.executeOnPooledThread(any()) } answers {
+                // Get the Runnable from the invocation and execute it immediately
+                val runnable = invocation.args[0] as? Runnable
+                runnable?.run()
+                mockk(relaxed = true) // Return a mock Future
+            }
+
+            // Set up getService to return relaxed mocks
+            every { mockApplication.getService(any<Class<*>>()) } returns mockk(relaxed = true)
+
             every { ApplicationManager.getApplication() } returns mockApplication
 
             // Mock ProxyThemAllSettings
@@ -53,15 +67,14 @@ object TestUtils {
             every { NotificationGroupManager.getInstance() } returns mockNotificationGroupManager
             every { mockApplication.getService(NotificationGroupManager::class.java) } returns mockNotificationGroupManager
 
-            // Make the Application.getService method return relaxed mocks for any other services
-            every { mockApplication.getService(any<Class<*>>()) } returns mockk(relaxed = true)
-
             // Mock ProxySettings with minimal functionality
+            // Return DirectProxy so the proxy state will be DISABLED, avoiding the NOT_CONFIGURED path
             mockkStatic(ProxySettings::class)
             val mockProxySettings = mockk<ProxySettings>(relaxed = true)
             val mockDirectProxy = object : ProxyConfiguration.DirectProxy {}
             every { mockProxySettings.getProxyConfiguration() } returns mockDirectProxy
             every { ProxySettings.getInstance() } returns mockProxySettings
+            every { mockApplication.getService(ProxySettings::class.java) } returns mockProxySettings
 
         } catch (e: Exception) {
             // If mocking fails, just continue - tests should handle missing mocks gracefully
