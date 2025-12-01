@@ -223,7 +223,7 @@ class GradleProxyConfigurer {
 
                         // Schedule changelist cleanup with a delay to let VCS process the change
                         ApplicationManager.getApplication().invokeLater({
-                            deleteProxyThemAllChangelistIfEmpty(project)
+                            cleanupProxyThemAllChangelist(project)
                         }, ModalityState.defaultModalityState())
                     }
                 } catch (e: Exception) {
@@ -237,9 +237,12 @@ class GradleProxyConfigurer {
     }
 
     /**
-     * Deletes the ProxyThemAll changelist if it exists and has no changes
+     * Cleans up the ProxyThemAll changelist based on its content:
+     * 1. If empty: removes the changelist
+     * 2. If only whitespace changes: reverts changes and removes the changelist
+     * 3. If real changes unrelated to ProxyThemAll: moves changes to default changelist and removes ProxyThemAll changelist
      */
-    private fun deleteProxyThemAllChangelistIfEmpty(project: Project?) {
+    private fun cleanupProxyThemAllChangelist(project: Project?) {
         project?.let { p ->
             ApplicationManager.getApplication().invokeLater({
                 try {
@@ -247,18 +250,105 @@ class GradleProxyConfigurer {
                     val proxyChangelist = changeListManager.findChangeList("ProxyThemAll")
 
                     proxyChangelist?.let { changelist ->
-                        // Only delete if the changelist is empty (no changes in it)
-                        if (changelist.changes.isEmpty()) {
-                            changeListManager.removeChangeList(changelist)
-                            LOG.info("Deleted empty ProxyThemAll changelist")
-                        } else {
-                            LOG.info("ProxyThemAll changelist not deleted because it contains changes")
+                        val changes = changelist.changes.toList()
+
+                        when {
+                            // Case 1: Changelist is empty
+                            changes.isEmpty() -> {
+                                changeListManager.removeChangeList(changelist)
+                                LOG.info("Deleted empty ProxyThemAll changelist")
+                            }
+
+                            // Case 2: Only whitespace/empty line changes
+                            areOnlyWhitespaceChanges(changes) -> {
+                                LOG.info("ProxyThemAll changelist contains only whitespace changes, reverting...")
+
+                                // Rollback the changes
+                                changes.forEach { change ->
+                                    try {
+                                        changeListManager.scheduleAutomaticEmptyChangeListDeletion(changelist)
+                                        // Revert the change by restoring original content
+                                        val virtualFile = change.virtualFile
+                                        if (virtualFile != null && change.beforeRevision != null) {
+                                            WriteCommandAction.runWriteCommandAction(p) {
+                                                val originalContent = change.beforeRevision?.content
+                                                if (originalContent != null) {
+                                                    virtualFile.setBinaryContent(originalContent.toByteArray())
+                                                }
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        LOG.warn("Failed to revert change for file: ${change.virtualFile?.path}", e)
+                                    }
+                                }
+
+                                // After reverting, the changelist should be empty, remove it
+                                if (changelist.changes.isEmpty()) {
+                                    changeListManager.removeChangeList(changelist)
+                                    LOG.info("Reverted whitespace changes and deleted ProxyThemAll changelist")
+                                } else {
+                                    LOG.warn("Some changes could not be reverted, changelist still contains changes")
+                                }
+                            }
+
+                            // Case 3: Real changes unrelated to ProxyThemAll
+                            else -> {
+                                LOG.info("ProxyThemAll changelist contains real changes, moving to default changelist...")
+
+                                val defaultChangelist = changeListManager.defaultChangeList
+
+                                // Move all changes to the default changelist
+                                changes.forEach { change ->
+                                    try {
+                                        changeListManager.moveChangesTo(defaultChangelist, change)
+                                    } catch (e: Exception) {
+                                        LOG.warn(
+                                            "Failed to move change to default changelist: ${change.virtualFile?.path}",
+                                            e
+                                        )
+                                    }
+                                }
+
+                                // After moving, remove the ProxyThemAll changelist
+                                if (changelist.changes.isEmpty()) {
+                                    changeListManager.removeChangeList(changelist)
+                                    LOG.info("Moved changes to default changelist and deleted ProxyThemAll changelist")
+                                } else {
+                                    LOG.warn("Some changes could not be moved, ProxyThemAll changelist still contains changes")
+                                }
+                            }
                         }
                     }
                 } catch (e: Exception) {
-                    LOG.warn("Failed to delete ProxyThemAll changelist", e)
+                    LOG.warn("Failed to cleanup ProxyThemAll changelist", e)
                 }
             }, ModalityState.defaultModalityState())
+        }
+    }
+
+    /**
+     * Checks if all changes in the list are only whitespace/empty line changes
+     * Returns true if all changes are whitespace-only, false otherwise
+     */
+    private fun areOnlyWhitespaceChanges(changes: List<com.intellij.openapi.vcs.changes.Change>): Boolean {
+        if (changes.isEmpty()) return false
+
+        return changes.all { change ->
+            try {
+                val beforeContent = change.beforeRevision?.content ?: ""
+                val afterContent = change.afterRevision?.content ?: ""
+
+                // Split into lines and filter out blank lines, then compare
+                val beforeLines = beforeContent.lines().filterNot { it.isBlank() }
+                val afterLines = afterContent.lines().filterNot { it.isBlank() }
+
+                // If the non-blank lines are identical, it's only a whitespace change
+                beforeLines == afterLines
+            } catch (e: Exception) {
+                LOG.warn("Failed to analyze change for file: ${change.virtualFile?.path}", e)
+                // If we can't determine, assume it's a real change to be safe
+                false
+            }
         }
     }
 

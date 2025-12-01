@@ -53,15 +53,28 @@ class ProxyController {
 
                 ProxyState.NOT_CONFIGURED -> {
                     LOG.info("Proxy not configured - showing configuration required notification")
-                    val hasStoredConfig = org.holululu.proxythemall.services.ProxyCredentialsStorage
-                        .getInstance()
-                        .hasStoredConfiguration()
-                    LOG.debug("Stored proxy configuration exists: $hasStoredConfig")
-                    
-                    notificationService.showNotification(
-                        project,
-                        NotificationMessages.proxyConfigurationRequired(project, hasStoredConfig)
-                    )
+
+                    // Execute the slow PasswordSafe operation on a background thread to avoid EDT violations
+                    com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+                        try {
+                            val hasStoredConfig = org.holululu.proxythemall.services.ProxyCredentialsStorage
+                                .getInstance()
+                                .hasStoredConfiguration()
+                            LOG.debug("Stored proxy configuration exists: $hasStoredConfig")
+
+                            // Show notification on EDT (notifications are safe to show from background threads)
+                            notificationService.showNotification(
+                                project,
+                                NotificationMessages.proxyConfigurationRequired(project, hasStoredConfig)
+                            )
+                        } catch (e: Exception) {
+                            LOG.error("Failed to check stored configuration", e)
+                            notificationService.showNotification(
+                                project,
+                                NotificationMessages.proxyConfigurationRequired(project, false)
+                            )
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {

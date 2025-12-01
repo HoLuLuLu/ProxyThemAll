@@ -71,15 +71,23 @@ class HttpProxySettingsChangeListener : ProxyStateChangeListener {
 
             when (newState) {
                 ProxyState.ENABLED -> {
-                    // Extract and backup to PasswordSafe
+                    // Extract proxy info on EDT (fast operation)
                     LOG.info("Proxy enabled - backing up configuration to PasswordSafe")
                     val proxyConfiguration = com.intellij.util.net.ProxySettings.getInstance().getProxyConfiguration()
                     val proxyInfo = proxyInfoExtractor.extractProxyInfo(proxyConfiguration)
 
                     if (proxyInfo != null) {
-                        credentialsStorage.saveProxyConfiguration(proxyInfo)
+                        // Move the slow PasswordSafe operation to a background thread to avoid EDT violations
+                        ApplicationManager.getApplication().executeOnPooledThread {
+                            try {
+                                credentialsStorage.saveProxyConfiguration(proxyInfo)
+                                LOG.info("Proxy configuration backed up successfully")
+                            } catch (e: Exception) {
+                                LOG.error("Failed to save proxy configuration to PasswordSafe", e)
+                            }
+                        }
+                        // Update flag immediately (fast operation)
                         settings.lastKnownProxyEnabled = true
-                        LOG.info("Proxy configuration backed up successfully")
                     } else {
                         LOG.warn("Could not extract proxy info for backup")
                     }
