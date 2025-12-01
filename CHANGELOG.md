@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.0.6] 2025-12-01
+
 ### Added
 
 - **Proxy Settings Backup and Restore**
