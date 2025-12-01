@@ -9,6 +9,7 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.util.Alarm
 import org.holululu.proxythemall.models.ProxyInfo
 import org.holululu.proxythemall.settings.ProxyThemAllSettings
 import java.io.File
@@ -28,7 +29,7 @@ class GradleProxyConfigurer {
         val instance: GradleProxyConfigurer by lazy { GradleProxyConfigurer() }
 
         private val LOG = Logger.getInstance(GradleProxyConfigurer::class.java)
-        private val settings = ProxyThemAllSettings.getInstance()
+        private fun getSettings() = ProxyThemAllSettings.getInstance()
 
         // Gradle proxy properties - using JVM system properties approach
         private const val HTTP_PROXY_HOST = "systemProp.http.proxyHost"
@@ -109,7 +110,7 @@ class GradleProxyConfigurer {
                         }
                     } else {
                         // Not a Gradle project - check if global fallback is enabled
-                        if (settings.enableGradleGlobalFallback) {
+                        if (getSettings().enableGradleGlobalFallback) {
                             // Global fallback is enabled - apply to global gradle.properties
                             configureGlobalGradleProperties(proxyInfo)
 
@@ -160,7 +161,7 @@ class GradleProxyConfigurer {
                         }
                     } else {
                         // Not a Gradle project - check if global fallback is enabled
-                        if (settings.enableGradleGlobalFallback) {
+                        if (getSettings().enableGradleGlobalFallback) {
                             // Global fallback is enabled - remove from global gradle.properties
                             val globalGradlePropertiesFile = getGlobalGradlePropertiesFile()
                             if (globalGradlePropertiesFile.exists()) {
@@ -201,9 +202,16 @@ class GradleProxyConfigurer {
 
             val contentWithoutProxy = removeProxyThemAllSection(existingContent)
 
-            // Do the file modification on EDT using WriteCommandAction
-            ApplicationManager.getApplication().invokeLater({
+            // Wait for VCS to be ready before performing changelist operations
+            executeWhenVcsReady(p, {
                 try {
+                    // Verify VCS is ready
+                    if (!isVcsReady(p)) {
+                        LOG.warn("VCS not ready for removal, falling back to direct file modification")
+                        removeProxyPropertiesFromFile(gradlePropertiesFile)
+                        return@executeWhenVcsReady
+                    }
+
                     val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(gradlePropertiesFile)
 
                     virtualFile?.let { vf ->
@@ -221,7 +229,7 @@ class GradleProxyConfigurer {
                 } catch (e: Exception) {
                     LOG.error("Failed to remove proxy settings with VFS", e)
                 }
-            }, ModalityState.defaultModalityState())
+            })
         } ?: run {
             // No project context, use direct file I/O
             removeProxyPropertiesFromFile(gradlePropertiesFile)
@@ -280,6 +288,57 @@ class GradleProxyConfigurer {
     }
 
     /**
+     * Checks if VCS and ChangeListManager are ready for operations
+     */
+    private fun isVcsReady(project: Project): Boolean {
+        return try {
+            val changeListManager = ChangeListManager.getInstance(project)
+            // Check if the manager is initialized and has at least the default changelist
+            changeListManager.changeLists.isNotEmpty()
+        } catch (e: Exception) {
+            LOG.warn("VCS not ready: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Waits for VCS to be ready and then executes the given action
+     * Uses IntelliJ's Alarm for proper delayed execution without blocking threads
+     */
+    private fun executeWhenVcsReady(project: Project, action: () -> Unit, retryCount: Int = 0) {
+        val maxRetries = 10
+
+        ApplicationManager.getApplication().invokeLater({
+            if (isVcsReady(project)) {
+                // VCS is ready, execute the action
+                action()
+            } else if (retryCount < maxRetries) {
+                // VCS not ready yet, schedule retry after delay using Alarm (non-blocking)
+                val delayMs: Long = (300 * (retryCount + 1)).toLong() // Increasing delay: 300ms, 600ms, 900ms...
+                LOG.info("VCS not ready (attempt ${retryCount + 1}/$maxRetries), retrying in ${delayMs}ms")
+
+                // Create alarm and schedule retry
+                val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD)
+                val nextRetryCount = retryCount + 1
+                alarm.addRequest(
+                    {
+                        try {
+                            executeWhenVcsReady(project, action, nextRetryCount)
+                        } finally {
+                            alarm.dispose()
+                        }
+                    },
+                    delayMs
+                )
+            } else {
+                // Max retries reached, execute action anyway (VCS checks will handle fallback)
+                LOG.warn("VCS not ready after $maxRetries attempts, proceeding anyway")
+                action()
+            }
+        }, ModalityState.defaultModalityState())
+    }
+
+    /**
      * Configures project-level gradle.properties file
      */
     private fun configureProjectGradleProperties(project: Project?, gradlePropertiesFile: File, proxyInfo: ProxyInfo) {
@@ -287,10 +346,18 @@ class GradleProxyConfigurer {
             // Prepare the new content
             val newContent = buildGradlePropertiesContent(gradlePropertiesFile, proxyInfo)
 
-            // Do EVERYTHING on EDT using WriteCommandAction
-            ApplicationManager.getApplication().invokeLater({
+            // Wait for VCS to be ready before performing changelist operations
+            executeWhenVcsReady(p, {
                 try {
                     val changeListManager = ChangeListManager.getInstance(p)
+
+                    // Verify VCS is still ready
+                    if (!isVcsReady(p)) {
+                        LOG.warn("VCS not ready for changelist operations, falling back to direct file modification")
+                        configureGradlePropertiesFile(gradlePropertiesFile, proxyInfo)
+                        return@executeWhenVcsReady
+                    }
+
                     val originalActiveList = changeListManager.defaultChangeList
 
                     // Find or create ProxyThemAll changelist
@@ -331,7 +398,7 @@ class GradleProxyConfigurer {
                 } catch (e: Exception) {
                     LOG.error("Failed to configure gradle.properties with changelist management", e)
                 }
-            }, ModalityState.defaultModalityState())
+            })
         } ?: run {
             // No project context, just modify the file normally
             configureGradlePropertiesFile(gradlePropertiesFile, proxyInfo)

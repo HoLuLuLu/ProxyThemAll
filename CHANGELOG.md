@@ -57,6 +57,15 @@
 
 ### Fixed
 
+- **Changelist Timing Issue on Project Open**
+    - Fixed issue where gradle.properties changes would appear in default changelist instead of ProxyThemAll changelist
+      when opening a new project
+    - Added VCS readiness checks before performing changelist operations
+    - Implemented StartupManager integration to ensure operations occur after project is fully initialized
+    - Added retry mechanism with delay if VCS isn't ready immediately
+    - Fallback to direct file modification if VCS remains unavailable
+    - Ensures consistent changelist behavior across project opens and IDE restarts
+
 - **Automatic Changelist Cleanup**
     - ProxyThemAll changelist is automatically deleted when proxy is disabled (if empty)
     - Safety check prevents deletion if changelist contains other changes

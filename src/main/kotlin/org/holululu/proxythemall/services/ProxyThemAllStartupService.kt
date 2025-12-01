@@ -103,24 +103,42 @@ class ProxyThemAllStartupService {
 
     /**
      * Performs cleanup and reapplication of proxy settings on IDE startup
+     * Uses invokeLater to ensure the operation happens after startup is complete
      */
     private fun performStartupCleanup() {
-        ApplicationManager.getApplication().invokeLater {
-            try {
-                LOG.info("Performing startup cleanup and reapplication of proxy settings for all projects")
+        try {
+            LOG.info("Scheduling startup cleanup and reapplication of proxy settings")
 
-                // Trigger cleanup and reapplication for all open projects
-                // This ensures all proxy configurations (IDE, Git, Gradle) are in sync across all projects
-                ProxyController.instance.cleanupAndReapplyProxySettings()
-
-                // Also trigger immediate proxy configuration check
-                // This handles cases where proxy was manually configured before plugin startup
-                HttpProxySettingsChangeListener.instance.onProxySettingsChanged()
-
-                LOG.info("Startup cleanup and reapplication completed successfully for all projects")
-            } catch (e: Exception) {
-                LOG.error("Failed to perform startup cleanup", e)
+            // Schedule cleanup to run after startup completes
+            // This gives time for VCS and other subsystems to initialize
+            ApplicationManager.getApplication().invokeLater {
+                performStartupCleanupForProjects()
             }
+
+            LOG.info("Startup cleanup scheduled successfully")
+        } catch (e: Exception) {
+            LOG.error("Failed to schedule startup cleanup", e)
+        }
+    }
+
+    /**
+     * Actually performs the cleanup and reapplication for all projects
+     */
+    private fun performStartupCleanupForProjects() {
+        try {
+            LOG.info("Performing startup cleanup and reapplication of proxy settings for all projects")
+
+            // Trigger cleanup and reapplication for all open projects
+            // This ensures all proxy configurations (IDE, Git, Gradle) are in sync across all projects
+            ProxyController.instance.cleanupAndReapplyProxySettings()
+
+            // Also trigger immediate proxy configuration check
+            // This handles cases where proxy was manually configured before plugin startup
+            HttpProxySettingsChangeListener.instance.onProxySettingsChanged()
+
+            LOG.info("Startup cleanup and reapplication completed successfully for all projects")
+        } catch (e: Exception) {
+            LOG.error("Failed to perform startup cleanup", e)
         }
     }
 }
