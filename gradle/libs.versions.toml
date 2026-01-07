@@ -1,7 +1,8 @@
 [versions]
 # libraries
-junit = "6.0.2"
-mockk = "1.14.6"
+junit = "6.0.1"
+junit4 = "4.13.2" # Required by IntelliJ Platform test framework
+mockk = "1.14.7"
 opentest4j = "1.3.0"
 kotlinxSerialization = "1.9.0"
 
@@ -14,6 +15,7 @@ qodana = "2025.3.1"
 
 [libraries]
 junit = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }
+junit4 = { group = "junit", name = "junit", version.ref = "junit4" } # Runtime dependency for IntelliJ Platform test framework compatibility
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 opentest4j = { group = "org.opentest4j", name = "opentest4j", version.ref = "opentest4j" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
