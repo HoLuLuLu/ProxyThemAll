@@ -10,8 +10,13 @@ import org.holululu.proxythemall.models.ProxyState
  *
  * This service coordinates with the modern ProxyConfiguration API and works
  * alongside GitProxyService and GradleProxyService to provide unified proxy management.
+ *
+ * @param proxySettings The ProxySettings instance to use. Defaults to the platform singleton.
+ *                      Can be injected for testing purposes.
  */
-class ProxyService {
+class ProxyService(
+    private val proxySettings: ProxySettings = ProxySettings.getInstance()
+) {
 
     companion object {
         @JvmStatic
@@ -28,7 +33,6 @@ class ProxyService {
      */
     fun getCurrentProxyState(): ProxyState {
         return try {
-            val proxySettings = ProxySettings.getInstance()
             val currentConfig = proxySettings.getProxyConfiguration()
             
             when {
@@ -55,7 +59,6 @@ class ProxyService {
      */
     fun toggleProxy(): ProxyState {
         return try {
-            val proxySettings = ProxySettings.getInstance()
             val currentState = getCurrentProxyState()
 
             when (currentState) {
@@ -88,7 +91,6 @@ class ProxyService {
      */
     fun forceEnableProxy(): ProxyState {
         return try {
-            val proxySettings = ProxySettings.getInstance()
             val currentConfig = proxySettings.getProxyConfiguration()
 
             // If current config is already a non-direct proxy, we're already enabled
@@ -110,19 +112,6 @@ class ProxyService {
         } catch (e: Exception) {
             LOG.error("Failed to force enable proxy", e)
             getCurrentProxyState()
-        }
-    }
-
-    /**
-     * Gets the current proxy configuration for use by other services
-     * @return the current ProxyConfiguration or null if not available
-     */
-    fun getCurrentProxyConfiguration(): ProxyConfiguration? {
-        return try {
-            ProxySettings.getInstance().getProxyConfiguration()
-        } catch (e: Exception) {
-            LOG.warn("Failed to get current proxy configuration", e)
-            null
         }
     }
 
@@ -202,7 +191,6 @@ class ProxyService {
                     lastProxyConfiguration !is ProxyConfiguration.DirectProxy
 
             // Also check if there's currently a non-direct proxy configuration
-            val proxySettings = ProxySettings.getInstance()
             val currentConfig = proxySettings.getProxyConfiguration()
             val hasCurrentConfig = currentConfig !is ProxyConfiguration.DirectProxy
 

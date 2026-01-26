@@ -13,8 +13,18 @@ import org.holululu.proxythemall.settings.ProxyThemAllSettings
  * This service acts as a facade that coordinates between:
  * - ProxyInfoExtractor: Extracts proxy information from IntelliJ settings
  * - GitProxyConfigurer: Configures Git with the extracted proxy information
+ *
+ * @param settings The settings instance. Defaults to the platform singleton.
+ * @param proxyInfoExtractor The proxy info extractor. Defaults to the singleton instance.
+ * @param gitProxyConfigurer The git proxy configurer. Defaults to the singleton instance.
+ * @param proxySettings The proxy settings instance. Defaults to the platform singleton.
  */
-class GitProxyService {
+class GitProxyService(
+    private val settings: ProxyThemAllSettings = ProxyThemAllSettings.getInstance(),
+    private val proxyInfoExtractor: ProxyInfoExtractor = ProxyInfoExtractor.instance,
+    private val gitProxyConfigurer: GitProxyConfigurer = GitProxyConfigurer.instance,
+    private val proxySettings: ProxySettings = ProxySettings.getInstance()
+) {
 
     companion object {
         @JvmStatic
@@ -22,10 +32,6 @@ class GitProxyService {
 
         private val LOG = Logger.getInstance(GitProxyService::class.java)
     }
-
-    private val settings = ProxyThemAllSettings.getInstance()
-    private val proxyInfoExtractor = ProxyInfoExtractor.instance
-    private val gitProxyConfigurer = GitProxyConfigurer.instance
 
     /**
      * Configures Git proxy settings based on current IDE proxy configuration
@@ -40,7 +46,6 @@ class GitProxyService {
         }
 
         try {
-            val proxySettings = ProxySettings.getInstance()
             when (val proxyConfiguration = proxySettings.getProxyConfiguration()) {
                 is ProxyConfiguration.DirectProxy -> {
                     // Remove proxy settings from Git
