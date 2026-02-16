@@ -41,7 +41,7 @@ dependencies {
     // JUnit 4 needed for IntelliJ Platform test framework (BasePlatformTestCase)
     testImplementation(libs.junit4)
     // JUnit Vintage engine to run JUnit 4 tests on JUnit Platform
-    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:6.0.2")
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:6.0.3")
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
