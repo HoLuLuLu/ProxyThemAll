@@ -36,12 +36,10 @@ dependencies {
     
     testImplementation(libs.junit)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation(libs.mockk)
-    testImplementation(libs.opentest4j)
-    // JUnit 4 needed for IntelliJ Platform test framework (BasePlatformTestCase)
-    testImplementation(libs.junit4)
-    // JUnit Vintage engine to run JUnit 4 tests on JUnit Platform
-    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:6.1.3")
+    // JUnit 4 is not used by any test, but com.intellij.tests.JUnit5TestSessionListener
+    // (a LauncherSessionListener registered by testFramework(Platform)) needs junit.framework.TestCase
+    // on the runtime classpath or the test JVM fails to start.
+    testRuntimeOnly(libs.junit4)
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
