@@ -256,6 +256,8 @@ class GradleProxyConfigurer {
                     // overwritten when the still-dirty document is saved.
                     val newContent = transform(document.text)
                     WriteCommandAction.runWriteCommandAction(project) {
+                        // setText, not the `text` property: Document.getText returns String while
+                        // setText takes CharSequence, so Kotlin exposes `text` as a val
                         document.text = newContent
                         documentManager.saveDocument(document)
                     }
@@ -399,14 +401,6 @@ class GradleProxyConfigurer {
         return File(gradleDir, "gradle.properties")
     }
 
-
-    /**
-     * Builds the complete gradle.properties file content
-     */
-    private fun buildGradlePropertiesContent(gradlePropertiesFile: File, proxyInfo: ProxyInfo): String {
-        val existingContent = readFileOrEmpty(gradlePropertiesFile)
-        return GradlePropertiesText.withProxySection(existingContent, proxyInfo)
-    }
 
     /**
      * Configures global gradle.properties file
