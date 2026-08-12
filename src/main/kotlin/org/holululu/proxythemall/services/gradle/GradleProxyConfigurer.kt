@@ -222,6 +222,10 @@ class GradleProxyConfigurer {
      * Callers run on a background thread (Task.Backgroundable), so the blocking file and VFS work
      * happens there and only the write command is dispatched to the EDT.
      */
+    // Document.setText must be called as a method: getText returns String while setText takes
+    // CharSequence, so Kotlin exposes `text` as a val and the IDE's property-access suggestion
+    // does not compile.
+    @Suppress("UsePropertyAccessSyntax")
     private fun writeThroughChangelist(
         project: Project,
         file: File,
@@ -256,9 +260,7 @@ class GradleProxyConfigurer {
                     // overwritten when the still-dirty document is saved.
                     val newContent = transform(document.text)
                     WriteCommandAction.runWriteCommandAction(project) {
-                        // setText, not the `text` property: Document.getText returns String while
-                        // setText takes CharSequence, so Kotlin exposes `text` as a val
-                        document.text = newContent
+                        document.setText(newContent)
                         documentManager.saveDocument(document)
                     }
                     LOG.info("Wrote ${file.name} through its open document")
