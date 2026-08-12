@@ -11,9 +11,13 @@ import org.holululu.proxythemall.models.ProxyState
  * This service coordinates with the modern ProxyConfiguration API and works
  * alongside GitProxyService and GradleProxyService to provide unified proxy management.
  *
+ * ProxySettings.setProxyConfiguration is marked experimental by the platform but is the only way
+ * to change the IDE proxy, which is this plugin's entire purpose.
+ *
  * @param proxySettings The ProxySettings instance to use. Defaults to the platform singleton.
  *                      Can be injected for testing purposes.
  */
+@Suppress("UnstableApiUsage")
 class ProxyService(
     private val proxySettings: ProxySettings = ProxySettings.getInstance()
 ) {
@@ -25,31 +29,54 @@ class ProxyService(
         private val LOG = Logger.getInstance(ProxyService::class.java)
     }
 
-    // Store the last proxy configuration for toggling
+    // Store the last proxy configuration for toggling; read from the EDT and the polling thread
+    @Volatile
     private var lastProxyConfiguration: ProxyConfiguration? = null
 
     /**
-     * Determines the current proxy state
+     * Determines the current proxy state.
+     *
+     * This is a pure query: it is called on every status bar repaint and must not mutate state.
+     * Remembering the active configuration happens in [rememberActiveConfiguration].
      */
     fun getCurrentProxyState(): ProxyState {
         return try {
-            val currentConfig = proxySettings.getProxyConfiguration()
-            
             when {
-                isProxyEnabled(proxySettings) -> {
-                    // If proxy is enabled but we don't have it stored, store it now
-                    if (lastProxyConfiguration == null || lastProxyConfiguration is ProxyConfiguration.DirectProxy) {
-                        lastProxyConfiguration = currentConfig
-                        LOG.debug("Stored current proxy configuration for future use")
-                    }
-                    ProxyState.ENABLED
-                }
+                isProxyEnabled(proxySettings) -> ProxyState.ENABLED
                 isProxyConfigured() -> ProxyState.DISABLED
                 else -> ProxyState.NOT_CONFIGURED
             }
         } catch (e: Exception) {
             LOG.warn("Failed to determine proxy state", e)
             ProxyState.NOT_CONFIGURED
+        }
+    }
+
+    /**
+     * Returns the proxy configuration currently held by the IDE, or null when it cannot be read.
+     *
+     * Used to detect edits that keep the state unchanged, such as a new port while the proxy stays
+     * enabled. The platform's configuration objects implement equals, so they can be compared.
+     */
+    fun getCurrentConfiguration(): ProxyConfiguration? = try {
+        proxySettings.getProxyConfiguration()
+    } catch (e: Exception) {
+        LOG.warn("Failed to read the current proxy configuration", e)
+        null
+    }
+
+    /**
+     * Remembers the currently active proxy configuration so it can be restored when re-enabling
+     */
+    fun rememberActiveConfiguration() {
+        try {
+            val currentConfig = proxySettings.getProxyConfiguration()
+            if (currentConfig !is ProxyConfiguration.DirectProxy) {
+                lastProxyConfiguration = currentConfig
+                LOG.debug("Stored current proxy configuration for future use")
+            }
+        } catch (e: Exception) {
+            LOG.warn("Failed to store current proxy configuration", e)
         }
     }
 
@@ -63,7 +90,7 @@ class ProxyService(
 
             when (currentState) {
                 ProxyState.ENABLED -> {
-                    storeCurrentProxySettings(proxySettings)
+                    rememberActiveConfiguration()
                     disableProxy(proxySettings)
                     ProxyState.DISABLED
                 }
@@ -79,7 +106,7 @@ class ProxyService(
                 }
             }
         } catch (e: Exception) {
-            LOG.error("Failed to toggle proxy", e)
+            LOG.warn("Failed to toggle proxy", e)
             getCurrentProxyState() // Return current state if toggle fails
         }
     }
@@ -110,7 +137,7 @@ class ProxyService(
             LOG.warn("Cannot force enable proxy - no configuration available")
             ProxyState.NOT_CONFIGURED
         } catch (e: Exception) {
-            LOG.error("Failed to force enable proxy", e)
+            LOG.warn("Failed to force enable proxy", e)
             getCurrentProxyState()
         }
     }
@@ -129,30 +156,16 @@ class ProxyService(
     }
 
     /**
-     * Stores the current proxy settings for later restoration
-     */
-    private fun storeCurrentProxySettings(proxySettings: ProxySettings) {
-        try {
-            val currentConfig = proxySettings.getProxyConfiguration()
-            if (currentConfig !is ProxyConfiguration.DirectProxy) {
-                lastProxyConfiguration = currentConfig
-                LOG.debug("Stored proxy configuration for later restoration")
-            }
-        } catch (e: Exception) {
-            LOG.warn("Failed to store current proxy settings", e)
-        }
-    }
-
-    /**
      * Disables the proxy by setting DirectProxy configuration
      */
     private fun disableProxy(proxySettings: ProxySettings) {
         try {
-            val directProxy = object : ProxyConfiguration.DirectProxy {}
-            proxySettings.setProxyConfiguration(directProxy)
+            // Use the platform factory: an anonymous implementation has no equals/hashCode and
+            // would never compare equal to the platform's own instances
+            proxySettings.setProxyConfiguration(ProxyConfiguration.direct)
             LOG.debug("Proxy disabled successfully")
         } catch (e: Exception) {
-            LOG.error("Failed to disable proxy", e)
+            LOG.warn("Failed to disable proxy", e)
             throw e
         }
     }
@@ -176,7 +189,7 @@ class ProxyService(
                 }
             }
         } catch (e: Exception) {
-            LOG.error("Failed to enable proxy", e)
+            LOG.warn("Failed to enable proxy", e)
             throw e
         }
     }

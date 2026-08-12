@@ -24,9 +24,8 @@ class ProxyStatusBarWidgetFactory : StatusBarWidgetFactory {
         return ProxyStatusBarWidget(project)
     }
 
-    override fun disposeWidget(widget: StatusBarWidget) {
-        // Disposal is handled by the widget itself
-    }
+    // disposeWidget is intentionally not overridden: the interface default calls
+    // Disposer.dispose(widget), which is what removes the widget's state change listener.
 
     override fun canBeEnabledOn(statusBar: StatusBar): Boolean = true
 }

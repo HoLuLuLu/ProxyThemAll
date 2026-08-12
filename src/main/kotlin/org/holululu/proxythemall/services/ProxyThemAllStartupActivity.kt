@@ -3,13 +3,12 @@ package org.holululu.proxythemall.services
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
-import org.holululu.proxythemall.listeners.HttpProxySettingsChangeListener
 
 /**
  * Startup activity that initializes ProxyThemAll plugin components
  *
- * This activity is executed after the IDE startup is complete and ensures that
- * the HttpProxySettingsChangeListener is properly registered with the ProxyStateChangeManager.
+ * This activity runs once per opened project; the setup itself is application wide and
+ * guarded against repeated execution by ProxyThemAllStartupService.
  */
 class ProxyThemAllStartupActivity : ProjectActivity {
 
@@ -21,19 +20,11 @@ class ProxyThemAllStartupActivity : ProjectActivity {
         try {
             LOG.info("Initializing ProxyThemAll plugin via startup activity")
 
-            // Register the HTTP proxy settings change listener
-            // This ensures that changes to IntelliJ's built-in proxy settings
-            // trigger cleanup and reapplication of proxy configurations
-            HttpProxySettingsChangeListener.instance.register()
-
-            // Get the startup service instance to trigger its initialization
-            // This will perform the startup cleanup and reapplication
-            val startupService = ProxyThemAllStartupService.getInstance()
-            startupService.performInitialSetup()
+            ProxyThemAllStartupService.getInstance().performInitialSetup()
 
             LOG.info("ProxyThemAll plugin initialized successfully via startup activity")
         } catch (e: Exception) {
-            LOG.error("Failed to initialize ProxyThemAll plugin via startup activity", e)
+            LOG.warn("Failed to initialize ProxyThemAll plugin via startup activity", e)
         }
     }
 }

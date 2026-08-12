@@ -2,130 +2,59 @@ package org.holululu.proxythemall.services.git
 
 import org.holululu.proxythemall.models.ProxyInfo
 import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
- * Test suite for GitProxyConfigurer with direct credentials approach
- *
- * Note: These are basic smoke tests since we cannot easily mock Git command execution
- * in the IntelliJ Platform test environment without external mocking libraries.
+ * Tests for the Git proxy configuration logic that does not need a running IDE.
  */
 class GitProxyConfigurerTest {
 
-    private lateinit var gitProxyConfigurer: GitProxyConfigurer
+    private val configurer = GitProxyConfigurer.instance
 
-    @BeforeEach
-    fun setUp() {
-        gitProxyConfigurer = GitProxyConfigurer.instance
-    }
-
-    @Test
-    fun testGitProxyConfigurerInstance() {
-        // Test that the configurer can be instantiated
-        assertNotNull(gitProxyConfigurer)
-    }
-
-    @Test
-    fun testSetGitProxyDoesNotThrow() {
-        // Test that setting Git proxy doesn't throw exceptions
-        // This is a basic smoke test since we can't easily mock Git commands
-        ProxyInfo(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "testuser",
-            password = "testpass",
-            nonProxyHosts = emptySet()
-        )
-
-        try {
-            // In unit test environment, this will likely throw exceptions due to missing IntelliJ context
-            // but we test that the service instance exists and methods are callable
-            assertTrue(true, "Service methods should be callable")
-        } catch (e: Exception) {
-            // Expected in unit test environment
-            assertTrue(true, "Expected exceptions in unit test environment")
-        }
-    }
-
-    @Test
-    fun testRemoveGitProxySettingsDoesNotThrow() {
-        // Test that removing Git proxy settings doesn't throw exceptions
-        try {
-            // In unit test environment, this will likely throw exceptions due to missing IntelliJ context
-            // but we test that the service instance exists and methods are callable
-            assertTrue(true, "Service methods should be callable")
-        } catch (e: Exception) {
-            // Expected in unit test environment
-            assertTrue(true, "Expected exceptions in unit test environment")
-        }
-    }
-
-    @Test
-    fun testProxyUrlBuilding() {
-        // Test that the configurer uses ProxyUrlBuilder correctly
-        // This is tested indirectly through the ProxyUrlBuilder tests
-        // Here we just verify the configurer doesn't throw exceptions when building URLs
-
-        ProxyInfo(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "user",
-            password = "pass",
-            nonProxyHosts = emptySet()
-        )
-
-        try {
-            // In unit test environment, this will likely throw exceptions due to missing IntelliJ context
-            // but we test that the service instance exists and methods are callable
-            assertTrue(true, "Service methods should be callable")
-        } catch (e: Exception) {
-            // Expected in unit test environment
-            assertTrue(true, "Expected exceptions in unit test environment")
-        }
-    }
-
-    @Test
-    fun testHasCredentials() {
-        // Use reflection to test private method
-        val method = GitProxyConfigurer::class.java.getDeclaredMethod(
-            "hasCredentials",
-            ProxyInfo::class.java
-        )
+    private fun noProxyHosts(proxyInfo: ProxyInfo): String {
+        val method = GitProxyConfigurer::class.java.getDeclaredMethod("gitNoProxyHosts", ProxyInfo::class.java)
         method.isAccessible = true
+        return method.invoke(configurer, proxyInfo) as String
+    }
 
-        // Test with credentials
-        val proxyWithCreds = ProxyInfo(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "user",
-            password = "pass",
-            nonProxyHosts = emptySet()
-        )
+    private fun proxy(vararg hosts: String) = ProxyInfo(
+        host = "proxy.example.com",
+        port = 8080,
+        nonProxyHosts = hosts.toSet()
+    )
 
-        val hasCredsResult = method.invoke(gitProxyConfigurer, proxyWithCreds) as Boolean
-        assertTrue(hasCredsResult, "Should have credentials")
+    @Test
+    fun `credentials are detected from the proxy info`() {
+        assertTrue(proxy().copy(username = "user", password = "pass").hasCredentials)
+        assertFalse(proxy().hasCredentials)
+        assertFalse(proxy().copy(username = "", password = "").hasCredentials)
+        assertFalse(proxy().copy(username = "user", password = "  ").hasCredentials)
+    }
 
-        // Test without credentials
-        val proxyWithoutCreds = ProxyInfo(
-            host = "proxy.example.com",
-            port = 8080,
-            nonProxyHosts = emptySet()
-        )
+    @Test
+    fun `glob patterns are dropped because git cannot match them`() {
+        // git's http.noproxy matches plain host and domain names only
+        val hosts = noProxyHosts(proxy("*.internal", "10.*", "build.example.com")).split(",")
 
-        val noCredsResult = method.invoke(gitProxyConfigurer, proxyWithoutCreds) as Boolean
-        assertFalse(noCredsResult, "Should not have credentials")
+        assertTrue(hosts.none { it.contains('*') }, "glob patterns must be dropped: $hosts")
+        assertTrue(hosts.contains("build.example.com"), "plain hosts must be kept: $hosts")
+        // localhost comes from the essential bypass hosts, 127.* is a glob and is dropped
+        assertTrue(hosts.contains("localhost"), "essential bypass hosts must be included: $hosts")
+    }
 
-        // Test with empty credentials
-        val proxyWithEmptyCreds = ProxyInfo(
-            host = "proxy.example.com",
-            port = 8080,
-            username = "",
-            password = "",
-            nonProxyHosts = emptySet()
-        )
+    @Test
+    fun `entries are trimmed and blanks removed`() {
+        val hosts = noProxyHosts(proxy(" build.example.com ", "", "   ")).split(",")
 
-        val emptyCredsResult = method.invoke(gitProxyConfigurer, proxyWithEmptyCreds) as Boolean
-        assertFalse(emptyCredsResult, "Should not have credentials when empty")
+        assertTrue(hosts.contains("build.example.com"), "entries must be trimmed: $hosts")
+        assertTrue(hosts.none { it.isBlank() }, "blank entries must be removed: $hosts")
+    }
+
+    @Test
+    fun `only the essential bypass hosts remain when the user configured none`() {
+        val hosts = noProxyHosts(proxy()).split(",")
+
+        // Of the essential hosts, "127.*" is a glob and is dropped; the other two are literal
+        assertEquals(setOf("localhost", "[::1]"), hosts.filter { it.isNotEmpty() }.toSet())
     }
 }

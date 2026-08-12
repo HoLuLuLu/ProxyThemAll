@@ -4,9 +4,7 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.net.ProxyConfiguration
 import com.intellij.util.net.ProxyConfiguration.ProxyProtocol
 import com.intellij.util.net.ProxyCredentialStore
-import org.apache.commons.lang3.StringUtils.isBlank
 import org.holululu.proxythemall.models.ProxyInfo
-import java.util.stream.Collectors.toSet
 
 
 /**
@@ -20,9 +18,6 @@ class ProxyInfoExtractor {
 
         private val LOG = Logger.getInstance(ProxyInfoExtractor::class.java)
     }
-
-    // Essential defaults that should always be excluded from proxy
-    val essentialDefaults = setOf("localhost", "127.*", "[::1]")
 
     /**
      * Extracts proxy information from ProxyConfiguration using modern API
@@ -78,8 +73,10 @@ class ProxyInfoExtractor {
                 ProxyProtocol.HTTP -> "http"
             }
 
-            // Combine user-defined hosts with essential defaults
-            val nonProxyHosts = essentialDefaults + extractNonProxyHosts(proxyConfiguration).filter { it.isNotBlank() }
+            // Only the user's own exceptions; the essential local hosts are added by
+            // ProxyInfo.bypassHosts when writing Git and Gradle configuration, so a
+            // backup/restore round trip never mutates the user's IDE settings
+            val nonProxyHosts = extractNonProxyHosts(proxyConfiguration)
 
             // Get Credentials for the proxy
             val credentials = ProxyCredentialStore.getInstance().getCredentials(host, port)
@@ -100,11 +97,21 @@ class ProxyInfoExtractor {
         }
     }
 
-    private fun extractNonProxyHosts(proxyConfiguration: ProxyConfiguration.StaticProxyConfiguration): Set<String> {
-        if (isBlank(proxyConfiguration.exceptions)) {
-            return emptySet()
-        }
+    /**
+     * Splits IntelliJ's comma separated exceptions field into individual hosts.
+     *
+     * Entries are trimmed: a leading space would prevent the host from ever matching.
+     */
+    fun extractNonProxyHosts(proxyConfiguration: ProxyConfiguration.StaticProxyConfiguration): Set<String> =
+        userExceptions(proxyConfiguration.exceptions)
 
-        return proxyConfiguration.exceptions.split(",").stream().collect(toSet())
-    }
+    /**
+     * Splits and trims a comma separated exceptions value
+     */
+    fun userExceptions(exceptions: String?): Set<String> =
+        exceptions?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.toSet()
+            ?: emptySet()
 }

@@ -1,5 +1,6 @@
 package org.holululu.proxythemall.services
 
+import com.intellij.credentialStore.Credentials
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
@@ -14,6 +15,7 @@ import org.holululu.proxythemall.core.ProxyController
 import org.holululu.proxythemall.models.NotificationData
 import org.holululu.proxythemall.models.ProxyInfo
 import org.holululu.proxythemall.notifications.NotificationService
+import org.holululu.proxythemall.settings.ProxyThemAllSettings
 
 /**
  * Service responsible for restoring proxy settings from PasswordSafe backup to IntelliJ
@@ -61,23 +63,23 @@ class ProxyRestoreService {
             val restored = restoreProxyToIntelliJ(proxyInfo)
 
             if (!restored) {
-                LOG.error("Failed to restore proxy configuration to IntelliJ")
+                LOG.warn("Failed to restore proxy configuration to IntelliJ")
                 showRestoreFailedNotification(project, "Failed to apply proxy settings")
                 return false
             }
 
-            // Trigger proxy controller to handle the enabled state on EDT
-            // This will configure Git and Gradle services
+            // The proxy is now configured and enabled, so record that for the next startup
+            ProxyThemAllSettings.getInstance().lastKnownProxyEnabled = true
+
+            // Configure Git and Gradle for the restored proxy. The silent variant is used because
+            // showRestoreSuccessNotification already reports the outcome.
             ApplicationManager.getApplication().invokeLater {
                 try {
-                    ProxyController.instance.cleanupAndReapplyProxySettingsForAllProjects(true)
-
-                    // Show success notification
+                    ProxyController.instance.cleanupAndReapplyProxySettingsForAllProjectsSilently(true)
                     showRestoreSuccessNotification(project, proxyInfo)
-
                     LOG.info("Proxy restored and activated successfully")
                 } catch (e: Exception) {
-                    LOG.error("Failed to activate proxy after restore", e)
+                    LOG.warn("Failed to activate proxy after restore", e)
                     showRestoreFailedNotification(
                         project,
                         "Proxy settings restored but activation failed: ${e.message}"
@@ -87,7 +89,7 @@ class ProxyRestoreService {
 
             true
         } catch (e: Exception) {
-            LOG.error("Failed to restore and activate proxy", e)
+            LOG.warn("Failed to restore and activate proxy", e)
             showRestoreFailedNotification(project, "Error: ${e.message ?: "Unknown error"}")
             false
         }
@@ -111,7 +113,7 @@ class ProxyRestoreService {
 
             restoreProxyToIntelliJ(proxyInfo)
         } catch (e: Exception) {
-            LOG.error("Failed to restore proxy from storage", e)
+            LOG.warn("Failed to restore proxy from storage", e)
             false
         }
     }
@@ -135,52 +137,34 @@ class ProxyRestoreService {
                 else -> ProxyConfiguration.ProxyProtocol.HTTP
             }
 
-            // Create static proxy configuration using explicit implementation
+            // Use the platform factory: a hand-rolled implementation has no equals/hashCode and
+            // never compares equal to the platform's own configuration objects
             val exceptions = proxyInfo.nonProxyHosts.joinToString(",")
-            val staticProxyConfig = StaticProxyConfigurationImpl(
-                protocol,
-                proxyInfo.host,
-                proxyInfo.port,
-                exceptions
+            proxySettings.setProxyConfiguration(
+                ProxyConfiguration.proxy(protocol, proxyInfo.host, proxyInfo.port, exceptions)
             )
-
-            // Apply proxy configuration
-            proxySettings.setProxyConfiguration(staticProxyConfig)
 
             // Set credentials if available
             if (!proxyInfo.username.isNullOrBlank() && !proxyInfo.password.isNullOrBlank()) {
                 LOG.debug("Setting proxy credentials for ${proxyInfo.host}:${proxyInfo.port}")
                 val credentialStore = ProxyCredentialStore.getInstance()
-                val credentials = com.intellij.credentialStore.Credentials(proxyInfo.username, proxyInfo.password)
+                val credentials = Credentials(proxyInfo.username, proxyInfo.password)
+                // remember = true, otherwise the password is memory-only and the next restart
+                // loses it again - which is exactly what this backup feature exists to prevent
                 credentialStore.setCredentials(
                     proxyInfo.host,
                     proxyInfo.port,
                     credentials,
-                    false
+                    true
                 )
             }
 
             LOG.info("Proxy configuration applied successfully to IntelliJ")
             true
         } catch (e: Exception) {
-            LOG.error("Failed to apply proxy configuration to IntelliJ", e)
+            LOG.warn("Failed to apply proxy configuration to IntelliJ", e)
             false
         }
-    }
-
-    /**
-     * Implementation of StaticProxyConfiguration for restoring proxy settings
-     */
-    private class StaticProxyConfigurationImpl(
-        private val _protocol: ProxyConfiguration.ProxyProtocol,
-        private val _host: String,
-        private val _port: Int,
-        private val _exceptions: String
-    ) : ProxyConfiguration.StaticProxyConfiguration {
-        override val protocol: ProxyConfiguration.ProxyProtocol get() = _protocol
-        override val host: String get() = _host
-        override val port: Int get() = _port
-        override val exceptions: String get() = _exceptions
     }
 
     /**

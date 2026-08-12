@@ -4,6 +4,94 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Proxy settings edits are applied without toggling the proxy**
+  - Changing host, port, protocol or exceptions while the proxy stays enabled is now detected. Previously the periodic
+    check only reacted to enabled/disabled transitions, so an `ENABLED → ENABLED` edit was ignored:
+    neither the PasswordSafe backup nor the Git and Gradle configuration updated until the user toggled the proxy off
+    and on again. Switching HTTP → SOCKS was affected in the same way
+  - The detection compares the platform's `ProxyConfiguration`, so an unchanged proxy still causes no work on the 2 s
+    tick
+
+- **gradle.properties data loss**
+  - Lines a user added *inside* the managed block are preserved instead of deleted. Removal now drops only the lines the
+    plugin itself wrote, comparing against the same keys and comments it emits
+  - When the file is open in an editor the plugin now reads and writes its document, so unsaved edits are neither missed
+    nor overwritten. Previously the read used `File.readText()` while the write went through the VFS, making the outcome
+    timing dependent
+    - The managed section is no longer duplicated on every toggle when it starts on the file's first line
+    - A user property directly above the section markers is no longer deleted during removal
+    - An existing `org.gradle.jvmargs` is preserved instead of being overridden by a duplicate key, which previously
+      discarded custom `-Xmx` settings
+    - Values are escaped for `.properties` syntax, so passwords containing backslashes are no longer corrupted
+    - Original line separators and trailing newline are preserved, avoiding whole-file diffs on CRLF checkouts
+    - Files are written through the VFS with the file's own charset instead of raw UTF-8 bytes
+
+- **Git configuration no longer clobbered**
+    - Disabling the proxy no longer removes a global Git proxy that the plugin never set. `git config --unset`
+      exits with code 5 for a missing key, which previously aborted the project-level removal and fell through to
+      `--global`
+    - Removal now uses `--unset-all` and treats "key does not exist" as success
+
+- **Credentials no longer leak into idea.log**
+    - The authenticated proxy URL (`http://user:password@host`) is no longer logged
+
+- **Restored proxy password now persists**
+    - Credentials are stored with `remember = true`; previously the restored password was memory-only and was lost again
+      on the next restart, defeating the purpose of the backup
+
+- **ProxyThemAll changelist**
+    - Changes are filed into the changelist after `ChangeListManager` has processed them, instead of by swapping the
+      user's active changelist around the write — a race that filed the change in the user's own list
+    - The changelist is deleted once it is actually empty, checked after a VCS refresh rather than immediately
+    - Leftover changes are moved to the default changelist instead of being reverted, which risked destroying concurrent
+      user edits
+  - Replaced the retry-with-delay loop with `ChangeListManager.invokeAfterUpdate`
+
+- **Memory leaks and duplicated work**
+    - The status bar widget and its project are no longer retained after the widget is removed
+    - The proxy state listener is registered once per application instead of once per open project, so a single state
+      change no longer triggers N git invocations and gradle.properties rewrites
+    - The periodic state check is now tied to the application lifetime and stops on plugin unload
+    - Removed a dead `MessageBusConnection` that subscribed to no topic and was never disposed
+    - Startup no longer performs the same cleanup and reapplication twice
+
+- **Notifications**
+    - Errors and the "configuration required" prompt are no longer suppressed by the "show notifications" setting
+    - Failures are reported as errors instead of an informational balloon titled "Proxy Disabled"
+    - Fixed a race where the state change balloon could be lost or duplicated
+
+- **Status bar widget visibility** now takes effect immediately; the restart prompt is gone
+
+- **Toggling applies to all open projects immediately** instead of relying on the periodic check to catch up
+
+- **SOCKS proxies** are written as `systemProp.socksProxyHost`/`Port` instead of being written as an HTTP proxy
+
+- **Proxy exceptions no longer mutated**: the plugin's own bypass hosts are written to Git and Gradle but are no longer
+  written back into your IDE exception list on backup and restore
+
+- **Non-proxy hosts for Git** now omit glob patterns such as `127.*`, which `http.noproxy` cannot match
+
+- **Credential URL encoding** follows RFC 3986, so a space in a password encodes as `%20` rather than `+`
+
+- Changing only the notification setting no longer rewrites Git and Gradle configuration
+- Expected environment failures (Git missing, key absent, locked keychain) log warnings instead of raising
+  "IDE fatal error" reports
+- A warning is logged when PasswordSafe is in memory-only mode, where the backup cannot survive a restart
+
+### Changed
+
+- Removed the unused hard dependency on the Gradle plugin; Gradle support only reads and writes
+  `gradle.properties` and needs no Gradle plugin API
+- The Tools menu entry now shows the action it will perform (Enable/Disable/Configure Proxy)
+- Replaced hand-rolled `ProxyConfiguration` implementations with the platform factories
+- Dropped an undeclared `commons-lang3` usage in favour of the Kotlin standard library
+- Removed the duplicate `ProxyThemAllSettings` service registration
+- Removed ~10 placeholder tests that asserted `true`; added real coverage for the gradle.properties handling, the proxy
+  toggle state machine, credential serialization, listener bookkeeping, and URL encoding
+- Added a Kover coverage floor so coverage regressions fail the build
+
 ## [0.0.6] 2025-12-01
 
 ### Added
@@ -63,9 +151,10 @@
     - Fixed issue where gradle.properties changes would appear in default changelist instead of ProxyThemAll changelist
       when opening a new project
     - Added VCS readiness checks before performing changelist operations
-    - Implemented StartupManager integration to ensure operations occur after project is fully initialized
     - Added retry mechanism with delay if VCS isn't ready immediately
     - Fallback to direct file modification if VCS remains unavailable
+  - (Superseded in Unreleased: the readiness check was ineffective and has been replaced by
+    `ChangeListManager.invokeAfterUpdate`)
     - Ensures consistent changelist behavior across project opens and IDE restarts
 
 - **Automatic Changelist Cleanup**

@@ -17,9 +17,9 @@ __Key Features:__
   storage (macOS Keychain, Windows Credential Manager, etc.) and restores them when IntelliJ forgets them after restart.
   Includes both automatic restore on startup and one-click manual restore via notification.
 - __One-click proxy toggle__: Enable or disable proxy settings instantly through the Tools menu or status bar widget
-- __Git integration__: Automatically configures Git proxy settings (http.proxy, https.proxy) with support for
-  authentication and non-proxy hosts
-- __Gradle integration__: Configures Gradle proxy settings via JVM system properties and gradle.properties files with
+- __Git integration__: Automatically configures the Git proxy (`http.proxy`, which Git also uses for HTTPS) with support
+  for authentication and non-proxy hosts (`http.noproxy`)
+- __Gradle integration__: Writes `systemProp.*` proxy properties to `gradle.properties` with
   smart project detection (optional, disabled by default)
 - __Multi-project support__: Applies proxy configuration changes to all open projects simultaneously
 - __Intelligent cleanup__: Automatically removes proxy settings when disabled and reapplies them during IDE startup
@@ -41,12 +41,18 @@ __Gradle-Specific Features:__
 
 - __Smart project detection__: Automatically detects Gradle projects and only applies Gradle proxy to actual Gradle
   projects
-- __Global fallback setting__: Configurable behavior for non-Gradle projects (apply to global ~
-  /.gradle/gradle.properties
-  or skip)
+- __Global fallback setting__: Configurable behavior for non-Gradle projects — apply to the global
+  `gradle.properties` (in `GRADLE_USER_HOME`, or `~/.gradle` when unset) or skip. Disabled by default.
 - __ProxyThemAll changelist__: Gradle configuration changes are automatically placed in a dedicated VCS changelist to
-  prevent accidental commits of proxy credentials
+  reduce the risk of accidentally committing proxy credentials
 - __Automatic cleanup__: ProxyThemAll changelist is automatically removed when proxy is disabled (if empty)
+
+> [!WARNING]
+> When your proxy requires authentication, Gradle integration writes the username and password in
+> __plain text__ into `gradle.properties`. Gradle offers no encrypted alternative for these properties. The
+> ProxyThemAll changelist keeps the file out of your usual commits, but it is not a security boundary —
+> committing all changes will include the credentials. Leave Gradle integration disabled if that is
+> unacceptable; without credentials the plugin writes only host, port and non-proxy hosts.
 
 __Target Users:__
 
@@ -58,6 +64,10 @@ __Target Users:__
 The plugin uses IntelliJ IDEA's existing proxy configuration and adds toggle functionality accessible through the Tools
 menu and an optional status bar widget. Git integration is enabled by default, while Gradle integration is optional and
 can be enabled in settings.
+
+Note: the IntelliJ Platform exposes no event for proxy configuration changes, so changes you make in
+<kbd>Settings</kbd> > <kbd>HTTP Proxy</kbd> are picked up by a lightweight periodic check. Changes made through the
+plugin itself take effect immediately.
 <!-- Plugin description end -->
 
 ## Project Structure
@@ -90,6 +100,7 @@ src/main/kotlin/org/holululu/proxythemall/
 │   │   ├── GitProxyConfigurer.kt      # Git proxy configuration management
 │   │   └── GitProxyService.kt         # Git-specific proxy operations
 │   └── gradle/
+│       ├── GradlePropertiesText.kt    # Pure gradle.properties section handling
 │       ├── GradleProxyConfigurer.kt   # Gradle proxy config with VCS changelist management
 │       └── GradleProxyService.kt      # Gradle project detection and proxy operations
 ├── settings/

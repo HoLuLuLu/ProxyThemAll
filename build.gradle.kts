@@ -130,6 +130,17 @@ kover {
             xml {
                 onCheck = true
             }
+
+            // Floor, not a target: keeps coverage from silently regressing. Raise it as the
+            // platform-coupled classes (widget, listeners, startup) gain tests.
+            verify {
+                rule {
+                    bound {
+                        minValue = 20
+                        coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.LINE
+                    }
+                }
+            }
         }
     }
 }

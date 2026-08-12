@@ -2,9 +2,11 @@ package org.holululu.proxythemall.utils
 
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import org.holululu.proxythemall.models.NotificationData
+import org.holululu.proxythemall.services.ProxyRestoreService
 
 /**
  * Utility object containing predefined notification messages
@@ -30,6 +32,16 @@ object NotificationMessages {
         type = NotificationType.INFORMATION
     )
 
+    /**
+     * Error notification for a failed proxy operation. Always shown, regardless of the
+     * "show notifications" setting.
+     */
+    fun proxyOperationFailed(reason: String): NotificationData = NotificationData(
+        title = "ProxyThemAll Failed",
+        message = reason,
+        type = NotificationType.ERROR
+    )
+
     fun proxyConfigurationRequired(project: Project?, hasStoredConfig: Boolean): NotificationData {
         val actions = mutableListOf<NotificationAction>()
 
@@ -38,8 +50,10 @@ object NotificationMessages {
         if (hasStoredConfig) {
             actions.add(
                 NotificationAction.createSimple("Restore Last Known Proxy Settings") {
-                    org.holululu.proxythemall.services.ProxyRestoreService.getInstance()
-                        .restoreAndActivateProxy(project)
+                    // Notification actions run on the EDT; PasswordSafe access must not
+                    ApplicationManager.getApplication().executeOnPooledThread {
+                        ProxyRestoreService.getInstance().restoreAndActivateProxy(project)
+                    }
                 }
             )
         }
