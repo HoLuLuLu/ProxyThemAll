@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-08-13
+
 ### Fixed
 
 - **No more balloon on every IDE startup**
