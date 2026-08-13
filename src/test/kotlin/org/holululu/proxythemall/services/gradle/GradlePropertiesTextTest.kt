@@ -108,6 +108,43 @@ class GradlePropertiesTextTest {
     }
 
     @Test
+    fun `socks proxy writes the socks bypass list`() {
+        // The JDK consults socksNonProxyHosts for socket-level connections; http.nonProxyHosts is
+        // only used for the http scheme, so without this key the user's exceptions are ignored
+        val socks = proxyInfo.copy(type = "socks5", nonProxyHosts = setOf("build.example.com"))
+
+        val parsed = parse(GradlePropertiesText.withProxySection("", socks))
+
+        val bypass = parsed.getProperty("systemProp.socksNonProxyHosts")
+        assertNotNull(bypass, "SOCKS needs its own bypass list")
+        assertTrue(bypass.contains("build.example.com"), "the user's exception must be present: $bypass")
+        assertTrue(bypass.contains("localhost"), "the essential bypass hosts must be present: $bypass")
+    }
+
+    @Test
+    fun `the socks bypass list is removed again on disable`() {
+        // Guards the OWN_KEYS registration: an unregistered key counts as a foreign user line and
+        // would be rescued by removeManagedSection, surviving forever
+        val socks = proxyInfo.copy(type = "socks5", nonProxyHosts = setOf("build.example.com"))
+        val original = "pluginGroup=org.example\n"
+
+        val applied = GradlePropertiesText.withProxySection(original, socks)
+        assertTrue(applied.contains("systemProp.socksNonProxyHosts"))
+
+        val removed = GradlePropertiesText.removeManagedSection(applied)
+
+        assertFalse(removed.contains("socksNonProxyHosts"), "our own key must not survive removal: $removed")
+        assertEquals(original, removed, "a SOCKS section must round-trip byte for byte")
+    }
+
+    @Test
+    fun `an http proxy does not write the socks bypass list`() {
+        val parsed = parse(GradlePropertiesText.withProxySection("", proxyInfo))
+
+        assertFalse(parsed.containsKey("systemProp.socksNonProxyHosts"), "irrelevant for an HTTP proxy")
+    }
+
+    @Test
     fun `configuring and removing a real file preserves surrounding content`() {
         val file = File.createTempFile("gradle", ".properties").apply { deleteOnExit() }
         val original = "# header\npluginGroup=org.example\n\n# footer\norg.gradle.caching=true\n"

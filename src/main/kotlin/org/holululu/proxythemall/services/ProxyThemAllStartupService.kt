@@ -122,7 +122,11 @@ class ProxyThemAllStartupService {
     }
 
     /**
-     * Performs cleanup and reapplication of proxy settings on IDE startup
+     * Performs cleanup and reapplication of proxy settings on IDE startup.
+     *
+     * Deliberately silent: startup only reconciles the existing configuration, the user did not
+     * toggle anything, so there is nothing to announce. The noisy variant would show a balloon on
+     * every launch - including "Proxy Disabled" to users who never configured a proxy at all.
      */
     private fun performStartupCleanup() {
         try {
@@ -132,7 +136,8 @@ class ProxyThemAllStartupService {
             // This gives time for VCS and other subsystems to initialize
             ApplicationManager.getApplication().invokeLater {
                 try {
-                    ProxyController.instance.cleanupAndReapplyProxySettings()
+                    val targetEnabled = ProxyService.instance.getCurrentProxyState().isProxyActive
+                    ProxyController.instance.cleanupAndReapplyProxySettingsForAllProjectsSilently(targetEnabled)
                     LOG.info("Startup cleanup and reapplication completed successfully for all projects")
                 } catch (e: Exception) {
                     LOG.warn("Failed to perform startup cleanup", e)

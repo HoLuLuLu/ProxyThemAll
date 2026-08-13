@@ -6,6 +6,17 @@
 
 ### Fixed
 
+- **No more balloon on every IDE startup**
+  - Startup reused the same notifying code path as a manual toggle, so every launch showed a proxy balloon — once per
+    open project. Users who had never configured a proxy were told "Proxy Disabled — You are now not using any proxy" at
+    every launch. Startup now reconciles silently; a real toggle still announces itself
+
+- **SOCKS proxies now honour non-proxy hosts**
+  - `systemProp.socksNonProxyHosts` is written for SOCKS proxies. Only `http.nonProxyHosts` was written before, which
+    the JDK consults for the `http` scheme but not for the socket-level connection a SOCKS proxy uses — so a SOCKS
+    user's exception list was silently ignored and builds were routed through the proxy even for excluded hosts. The
+    plugin's built-in local bypasses were unaffected; what was lost was the user's own exception list
+
 - **Proxy settings edits are applied without toggling the proxy**
   - Changing host, port, protocol or exceptions while the proxy stays enabled is now detected. Previously the periodic
     check only reacted to enabled/disabled transitions, so an `ENABLED → ENABLED` edit was ignored:
@@ -78,7 +89,9 @@
 - Changing only the notification setting no longer rewrites Git and Gradle configuration
 - Expected environment failures (Git missing, key absent, locked keychain) log warnings instead of raising
   "IDE fatal error" reports
-- A warning is logged when PasswordSafe is in memory-only mode, where the backup cannot survive a restart
+- A warning is logged when PasswordSafe is in memory-only mode, where the backup cannot survive a restart. It now also
+  fires on the read paths, so the warning appears in the session that finds the backup missing rather than only in the
+  one that wrote it
 
 ### Changed
 

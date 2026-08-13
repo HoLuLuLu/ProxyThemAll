@@ -1,6 +1,7 @@
 package org.holululu.proxythemall.services.gradle
 
 import org.holululu.proxythemall.models.ProxyInfo
+import org.holululu.proxythemall.services.gradle.GradlePropertiesText.detectLineSeparator
 
 /**
  * Pure text manipulation of gradle.properties content for the ProxyThemAll managed section.
@@ -27,13 +28,21 @@ object GradlePropertiesText {
     private const val HTTPS_PORT = "systemProp.https.proxyPort"
     private const val HTTP_NON_PROXY_HOSTS = "systemProp.http.nonProxyHosts"
     private const val HTTPS_NON_PROXY_HOSTS = "systemProp.https.nonProxyHosts"
+
+    // The JDK keeps a separate bypass list for socket-level connections (sun.net.spi
+    // DefaultProxySelector consults socksNonProxyHosts for the "socket" scheme). Without it a SOCKS
+    // proxy ignores the user's exceptions entirely, because http.nonProxyHosts is only consulted
+    // for the http scheme.
+    private const val SOCKS_NON_PROXY_HOSTS = "systemProp.socksNonProxyHosts"
     private const val HTTP_USER = "systemProp.http.proxyUser"
     private const val HTTP_PASSWORD = "systemProp.http.proxyPassword"
     private const val HTTPS_USER = "systemProp.https.proxyUser"
     private const val HTTPS_PASSWORD = "systemProp.https.proxyPassword"
 
+    // Every key here must also be written by buildSection, and every key buildSection writes must be
+    // listed here - an unlisted key is treated as a user's own line and preserved on removal.
     private val OWN_KEYS = setOf(
-        SOCKS_HOST, SOCKS_PORT,
+        SOCKS_HOST, SOCKS_PORT, SOCKS_NON_PROXY_HOSTS,
         HTTP_HOST, HTTP_PORT, HTTPS_HOST, HTTPS_PORT,
         HTTP_NON_PROXY_HOSTS, HTTPS_NON_PROXY_HOSTS,
         HTTP_USER, HTTP_PASSWORD, HTTPS_USER, HTTPS_PASSWORD
@@ -84,6 +93,9 @@ object GradlePropertiesText {
      *
      * A single blank line directly above the START marker is dropped as well, since that is what
      * [withProxySection] inserts - but only when it really is blank, never a user's property.
+     *
+     * Note: when this rewrites the file it normalises every line to one separator (see
+     * [detectLineSeparator]), so a file with mixed endings comes back uniform.
      */
     fun removeManagedSection(content: String): String {
         if (content.isBlank()) return content
@@ -171,8 +183,14 @@ object GradlePropertiesText {
 
         val nonProxyHosts = proxyInfo.bypassHosts.joinToString(HOSTS_SEPARATOR)
         appendLine(COMMENT_NON_PROXY)
-        appendProperty(HTTP_NON_PROXY_HOSTS, nonProxyHosts)
-        appendProperty(HTTPS_NON_PROXY_HOSTS, nonProxyHosts)
+        if (proxyInfo.isSocks) {
+            // The JDK reads socksNonProxyHosts for socket connections; the http key would be ignored
+            appendProperty(SOCKS_NON_PROXY_HOSTS, nonProxyHosts)
+        } else {
+            appendProperty(HTTP_NON_PROXY_HOSTS, nonProxyHosts)
+            // https reuses the http list in the JDK; written for readability, not effect
+            appendProperty(HTTPS_NON_PROXY_HOSTS, nonProxyHosts)
+        }
         appendLine()
 
         if (proxyInfo.hasCredentials) {
@@ -217,7 +235,13 @@ object GradlePropertiesText {
     }
 
     /**
-     * Detects the dominant line separator, defaulting to `\n` for new or single-line files.
+     * Returns `\r\n` when the content contains any CRLF, otherwise `\n`.
+     *
+     * Not a "dominant separator" vote: a single CRLF is enough. That is deliberate - because
+     * [removeManagedSection] rebuilds the file with `joinToString(separator)`, a mixed-ending file is
+     * normalised to one separator whichever way this decides, so counting would only change *which*
+     * lines get rewritten. Genuinely preserving mixed endings would need per-line tracking, which is
+     * more machinery than a cosmetic diff is worth.
      */
     private fun detectLineSeparator(content: String): String =
         if (content.contains("\r\n")) "\r\n" else "\n"

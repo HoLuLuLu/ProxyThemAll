@@ -91,8 +91,6 @@ class ProxyCredentialsStorage {
         try {
             LOG.info("Saving proxy configuration to PasswordSafe: host=${proxyInfo.host}, port=${proxyInfo.port}")
 
-            warnIfMemoryOnly()
-
             val jsonString = serialize(proxyInfo)
 
             val credentialAttributes = createCredentialAttributes()
@@ -187,9 +185,15 @@ class ProxyCredentialsStorage {
     }
 
     /**
-     * Creates credential attributes for PasswordSafe storage
+     * Creates credential attributes for PasswordSafe storage.
+     *
+     * Save, load, existence check and clear all route through here, so this is where the memory-only
+     * warning belongs: it must also fire on the *read* paths, since the session that discovers the
+     * backup has evaporated is the one where the diagnosis is useful.
      */
     private fun createCredentialAttributes(): CredentialAttributes {
+        warnIfMemoryOnly()
+
         return CredentialAttributes(
             generateServiceName(SERVICE_NAME, PROXY_BACKUP_KEY)
         )
