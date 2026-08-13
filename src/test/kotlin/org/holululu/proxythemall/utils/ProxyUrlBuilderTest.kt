@@ -208,7 +208,7 @@ class ProxyUrlBuilderTest {
         val result = builder.buildProxyUrl(host, port, username, password, type)
 
         // Then
-        assertEquals("http://user+name:pass+word@proxy.example.com:8080", result)
+        assertEquals("http://user%20name:pass%20word@proxy.example.com:8080", result)
     }
 
     @Test
@@ -241,7 +241,7 @@ class ProxyUrlBuilderTest {
 
         // Then
         assertEquals(
-            "http://user%21%40%23%24%25%5E%26*%28%29:pass%21%40%23%24%25%5E%26*%28%29@proxy.example.com:8080",
+            "http://user%21%40%23%24%25%5E%26%2A%28%29:pass%21%40%23%24%25%5E%26%2A%28%29@proxy.example.com:8080",
             result
         )
     }

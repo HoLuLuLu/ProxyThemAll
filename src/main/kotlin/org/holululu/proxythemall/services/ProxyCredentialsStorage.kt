@@ -11,6 +11,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.holululu.proxythemall.models.ProxyInfo
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Service responsible for securely storing and retrieving proxy configuration using PasswordSafe.
@@ -33,14 +34,17 @@ class ProxyCredentialsStorage {
         }
     }
 
+    /**
+     * Serializable data class for storing proxy configuration
+     */
     private val json = Json {
         prettyPrint = false
         ignoreUnknownKeys = true
     }
 
-    /**
-     * Serializable data class for storing proxy configuration
-     */
+    // Guards the memory-only warning so it is logged at most once per IDE session
+    private val memoryOnlyWarningShown = AtomicBoolean(false)
+
     @Serializable
     private data class StoredProxyConfig(
         val host: String,
@@ -52,22 +56,42 @@ class ProxyCredentialsStorage {
     )
 
     /**
+     * Serializes a proxy configuration to the JSON payload kept in PasswordSafe
+     */
+    fun serialize(proxyInfo: ProxyInfo): String = json.encodeToString(
+        StoredProxyConfig(
+            host = proxyInfo.host,
+            port = proxyInfo.port,
+            username = proxyInfo.username,
+            password = proxyInfo.password,
+            type = proxyInfo.type,
+            nonProxyHosts = proxyInfo.nonProxyHosts.toList()
+        )
+    )
+
+    /**
+     * Parses a JSON payload previously produced by [serialize]
+     */
+    fun deserialize(payload: String): ProxyInfo {
+        val storedConfig = json.decodeFromString<StoredProxyConfig>(payload)
+        return ProxyInfo(
+            host = storedConfig.host,
+            port = storedConfig.port,
+            username = storedConfig.username,
+            password = storedConfig.password,
+            type = storedConfig.type,
+            nonProxyHosts = storedConfig.nonProxyHosts.toSet()
+        )
+    }
+
+    /**
      * Saves the complete proxy configuration to PasswordSafe
      */
     fun saveProxyConfiguration(proxyInfo: ProxyInfo) {
         try {
             LOG.info("Saving proxy configuration to PasswordSafe: host=${proxyInfo.host}, port=${proxyInfo.port}")
 
-            val storedConfig = StoredProxyConfig(
-                host = proxyInfo.host,
-                port = proxyInfo.port,
-                username = proxyInfo.username,
-                password = proxyInfo.password,
-                type = proxyInfo.type,
-                nonProxyHosts = proxyInfo.nonProxyHosts.toList()
-            )
-
-            val jsonString = json.encodeToString(storedConfig)
+            val jsonString = serialize(proxyInfo)
 
             val credentialAttributes = createCredentialAttributes()
             val credentials = Credentials(PROXY_BACKUP_KEY, jsonString)
@@ -76,7 +100,7 @@ class ProxyCredentialsStorage {
 
             LOG.info("Proxy configuration saved successfully to PasswordSafe")
         } catch (e: Exception) {
-            LOG.error("Failed to save proxy configuration to PasswordSafe", e)
+            LOG.warn("Failed to save proxy configuration to PasswordSafe", e)
         }
     }
 
@@ -103,21 +127,12 @@ class ProxyCredentialsStorage {
                 return null
             }
 
-            val storedConfig = json.decodeFromString<StoredProxyConfig>(jsonString)
-
-            val proxyInfo = ProxyInfo(
-                host = storedConfig.host,
-                port = storedConfig.port,
-                username = storedConfig.username,
-                password = storedConfig.password,
-                type = storedConfig.type,
-                nonProxyHosts = storedConfig.nonProxyHosts.toSet()
-            )
+            val proxyInfo = deserialize(jsonString)
 
             LOG.info("Proxy configuration loaded successfully from PasswordSafe: host=${proxyInfo.host}, port=${proxyInfo.port}")
             return proxyInfo
         } catch (e: Exception) {
-            LOG.error("Failed to load proxy configuration from PasswordSafe", e)
+            LOG.warn("Failed to load proxy configuration from PasswordSafe", e)
             return null
         }
     }
@@ -135,7 +150,7 @@ class ProxyCredentialsStorage {
             LOG.debug("Checking for stored proxy configuration: $hasConfig")
             return hasConfig
         } catch (e: Exception) {
-            LOG.error("Failed to check for stored proxy configuration", e)
+            LOG.warn("Failed to check for stored proxy configuration", e)
             return false
         }
     }
@@ -150,14 +165,35 @@ class ProxyCredentialsStorage {
             PasswordSafe.instance.set(credentialAttributes, null)
             LOG.info("Stored proxy configuration cleared successfully")
         } catch (e: Exception) {
-            LOG.error("Failed to clear stored proxy configuration", e)
+            LOG.warn("Failed to clear stored proxy configuration", e)
         }
     }
 
     /**
-     * Creates credential attributes for PasswordSafe storage
+     * Warns once when PasswordSafe is configured not to persist secrets.
+     *
+     * In that mode the backup silently disappears on IDE restart, which is exactly the situation
+     * this feature exists to survive.
+     */
+    private fun warnIfMemoryOnly() {
+        if (PasswordSafe.instance.isMemoryOnly && memoryOnlyWarningShown.compareAndSet(false, true)) {
+            LOG.warn(
+                "PasswordSafe is in memory-only mode (\"do not save, forget passwords after restart\"). " +
+                        "The proxy backup will not survive an IDE restart."
+            )
+        }
+    }
+
+    /**
+     * Creates credential attributes for PasswordSafe storage.
+     *
+     * Save, load, existence check and clear all route through here, so this is where the memory-only
+     * warning belongs: it must also fire on the *read* paths, since the session that discovers the
+     * backup has evaporated is the one where the diagnosis is useful.
      */
     private fun createCredentialAttributes(): CredentialAttributes {
+        warnIfMemoryOnly()
+
         return CredentialAttributes(
             generateServiceName(SERVICE_NAME, PROXY_BACKUP_KEY)
         )

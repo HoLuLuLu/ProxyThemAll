@@ -1,15 +1,19 @@
 package org.holululu.proxythemall.settings
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.wm.WindowManager
+import com.intellij.openapi.wm.impl.status.widget.StatusBarWidgetsManager
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
 import org.holululu.proxythemall.core.ProxyController
+import org.holululu.proxythemall.services.ProxyCredentialsStorage
 import org.holululu.proxythemall.widgets.ProxyStatusBarWidget
+import org.holululu.proxythemall.widgets.ProxyStatusBarWidgetFactory
 import javax.swing.JComponent
 
 /**
@@ -19,10 +23,7 @@ class ProxyThemAllConfigurable : Configurable {
 
     private var settingsComponent: DialogPanel? = null
     private val settings = ProxyThemAllSettings.getInstance()
-    private var originalShowStatusBarWidget: Boolean = settings.showStatusBarWidget
-
     // Store original values to detect changes in ProxyThemAll settings
-    private var originalShowNotifications: Boolean = settings.showNotifications
     private var originalApplyProxyToGit: Boolean = settings.applyProxyToGit
     private var originalEnableGradleProxySupport: Boolean = settings.enableGradleProxySupport
     private var originalEnableGradleGlobalFallback: Boolean = settings.enableGradleGlobalFallback
@@ -31,8 +32,6 @@ class ProxyThemAllConfigurable : Configurable {
 
     override fun createComponent(): JComponent {
         // Store all original values when the component is created
-        originalShowStatusBarWidget = settings.showStatusBarWidget
-        originalShowNotifications = settings.showNotifications
         originalApplyProxyToGit = settings.applyProxyToGit
         originalEnableGradleProxySupport = settings.enableGradleProxySupport
         originalEnableGradleGlobalFallback = settings.enableGradleGlobalFallback
@@ -66,7 +65,13 @@ class ProxyThemAllConfigurable : Configurable {
                 row {
                     checkBox("Apply proxy settings to Gradle")
                         .bindSelected(settings::enableGradleProxySupport)
-                        .comment("Enable proxy configuration for Gradle builds")
+                        .comment(
+                            "Enable proxy configuration for Gradle builds.<br/>" +
+                                    "<b>Warning:</b> when the proxy requires authentication, the username and " +
+                                    "password are written in plain text to gradle.properties. The ProxyThemAll " +
+                                    "changelist reduces the risk of committing them, but it is not a security " +
+                                    "boundary - a commit of all changes will include them."
+                        )
                 }
                 row {
                     checkBox("Allow global Gradle configuration fallback")
@@ -87,20 +92,29 @@ class ProxyThemAllConfigurable : Configurable {
                         )
 
                         if (result == Messages.YES) {
-                            try {
-                                org.holululu.proxythemall.services.ProxyCredentialsStorage.getInstance()
-                                    .clearStoredConfiguration()
-                                settings.lastKnownProxyEnabled = false
+                            // PasswordSafe access must not run on the EDT
+                            ApplicationManager.getApplication().executeOnPooledThread {
+                                val error = try {
+                                    ProxyCredentialsStorage.getInstance().clearStoredConfiguration()
+                                    settings.lastKnownProxyEnabled = false
+                                    null
+                                } catch (e: Exception) {
+                                    e.message ?: "unknown error"
+                                }
 
-                                Messages.showInfoMessage(
-                                    "Stored proxy configuration has been cleared successfully.",
-                                    "ProxyThemAll"
-                                )
-                            } catch (e: Exception) {
-                                Messages.showErrorDialog(
-                                    "Failed to clear stored proxy configuration: ${e.message}",
-                                    "ProxyThemAll - Error"
-                                )
+                                ApplicationManager.getApplication().invokeLater {
+                                    if (error == null) {
+                                        Messages.showInfoMessage(
+                                            "Stored proxy configuration has been cleared successfully.",
+                                            "ProxyThemAll"
+                                        )
+                                    } else {
+                                        Messages.showErrorDialog(
+                                            "Failed to clear stored proxy configuration: $error",
+                                            "ProxyThemAll - Error"
+                                        )
+                                    }
+                                }
                             }
                         }
                     }.comment("Remove backed-up proxy settings from secure storage")
@@ -118,14 +132,12 @@ class ProxyThemAllConfigurable : Configurable {
     override fun apply() {
         settingsComponent?.apply()
 
-        // Check if any ProxyThemAll settings have changed
-        val proxySettingsChanged = originalShowNotifications != settings.showNotifications ||
-                originalApplyProxyToGit != settings.applyProxyToGit ||
+        // Only settings that affect how the proxy is applied need a reapplication.
+        // The notification toggle is cosmetic - reapplying would needlessly rerun git commands
+        // and rewrite gradle.properties in every open project.
+        val proxySettingsChanged = originalApplyProxyToGit != settings.applyProxyToGit ||
                 originalEnableGradleProxySupport != settings.enableGradleProxySupport ||
                 originalEnableGradleGlobalFallback != settings.enableGradleGlobalFallback
-
-        // Check if the status bar widget visibility setting has changed
-        val widgetVisibilityChanged = originalShowStatusBarWidget != settings.showStatusBarWidget
 
         // If any proxy-related settings changed, perform cleanup and reapplication
         if (proxySettingsChanged) {
@@ -140,17 +152,7 @@ class ProxyThemAllConfigurable : Configurable {
         // Update status bar widgets in all open projects when settings change
         updateStatusBarWidgets()
 
-        // Show restart notification if widget visibility changed
-        if (widgetVisibilityChanged) {
-            Messages.showWarningDialog(
-                "Please restart the IDE for the status bar widget visibility changes to take effect.",
-                "ProxyThemAll - Restart Required"
-            )
-        }
-
         // Update all original values for future comparisons
-        originalShowStatusBarWidget = settings.showStatusBarWidget
-        originalShowNotifications = settings.showNotifications
         originalApplyProxyToGit = settings.applyProxyToGit
         originalEnableGradleProxySupport = settings.enableGradleProxySupport
         originalEnableGradleGlobalFallback = settings.enableGradleGlobalFallback
@@ -159,10 +161,16 @@ class ProxyThemAllConfigurable : Configurable {
     private fun updateStatusBarWidgets() {
         ApplicationManager.getApplication().invokeLater {
             ProjectManager.getInstance().openProjects.forEach { project ->
-                val statusBar = WindowManager.getInstance().getStatusBar(project)
-                // Update the proxy status bar widget - this will re-evaluate isAvailable() for the widget factory
-                // and show/hide the widget accordingly
-                statusBar?.updateWidget(ProxyStatusBarWidget.WIDGET_ID)
+                if (project.isDisposed) return@forEach
+
+                // StatusBarWidgetsManager re-evaluates the factory's isAvailable(), which adds or
+                // removes the widget. StatusBar.updateWidget() only repaints an existing widget,
+                // which is why hiding it used to require an IDE restart.
+                project.service<StatusBarWidgetsManager>()
+                    .updateWidget(ProxyStatusBarWidgetFactory::class.java)
+
+                WindowManager.getInstance().getStatusBar(project)
+                    ?.updateWidget(ProxyStatusBarWidget.WIDGET_ID)
             }
         }
     }

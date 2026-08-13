@@ -1,6 +1,7 @@
 package org.holululu.proxythemall.notifications
 
 import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.Project
 import org.holululu.proxythemall.models.NotificationData
 import org.holululu.proxythemall.settings.ProxyThemAllSettings
@@ -18,12 +19,15 @@ class NotificationService {
     }
 
     /**
-     * Shows a notification with the specified data
+     * Shows a notification with the specified data.
+     *
+     * The "show notifications" setting only suppresses informational state change balloons.
+     * Warnings and errors are always shown - silently swallowing a failure would leave the user
+     * with a broken proxy setup and no indication why.
      */
     fun showNotification(project: Project?, notificationData: NotificationData) {
-        // Check if notifications are enabled in settings
-        val settings = ProxyThemAllSettings.getInstance()
-        if (!settings.showNotifications) {
+        val isInformational = notificationData.type == NotificationType.INFORMATION
+        if (isInformational && !ProxyThemAllSettings.getInstance().showNotifications) {
             return
         }
 

@@ -58,7 +58,7 @@ class GradleProxyService {
                 }
             }
         } catch (e: Exception) {
-            LOG.error("Failed to configure Gradle proxy", e)
+            LOG.warn("Failed to configure Gradle proxy", e)
             onComplete("Gradle proxy configuration failed")
         }
     }

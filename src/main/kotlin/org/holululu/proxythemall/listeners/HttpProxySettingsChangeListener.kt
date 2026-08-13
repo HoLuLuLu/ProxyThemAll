@@ -2,10 +2,14 @@ package org.holululu.proxythemall.listeners
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.util.messages.MessageBusConnection
+import com.intellij.util.net.ProxyConfiguration
+import com.intellij.util.net.ProxySettings
 import org.holululu.proxythemall.core.ProxyController
 import org.holululu.proxythemall.models.ProxyState
+import org.holululu.proxythemall.services.ProxyCredentialsStorage
+import org.holululu.proxythemall.services.ProxyInfoExtractor
 import org.holululu.proxythemall.services.ProxyService
+import org.holululu.proxythemall.settings.ProxyThemAllSettings
 
 /**
  * Listener that handles HTTP proxy settings changes by triggering cleanup and reapplication
@@ -25,39 +29,45 @@ class HttpProxySettingsChangeListener : ProxyStateChangeListener {
 
     private val proxyController = ProxyController.instance
     private val proxyService = ProxyService.instance
+
+    // Written from the polling thread and read on the EDT
+    @Volatile
     private var lastProcessedState: ProxyState? = null
-    private var messageBusConnection: MessageBusConnection? = null
+
+    // Last configuration we acted on. ProxyStateChangeManager decides when to notify; this is an
+    // idempotency guard so a redundant notifyStateChanged() does not reapply everything again.
+    @Volatile
+    private var lastProcessedConfiguration: ProxyConfiguration? = null
 
     /**
      * Called when the proxy state changes due to HTTP proxy settings modifications
      */
     override fun onProxyStateChanged(newState: ProxyState) {
-        LOG.info("HttpProxySettingsChangeListener.onProxyStateChanged called with state: $newState, lastProcessedState: $lastProcessedState")
-        
-        // Only process if the state actually changed to avoid unnecessary cleanup cycles
-        if (lastProcessedState != newState) {
-            lastProcessedState = newState
-
-            LOG.info("HTTP proxy settings changed, new state: $newState - triggering cleanup and reapplication for all projects")
-
-            // Handle backup to PasswordSafe based on new state
-            handleProxyBackup(newState)
-
-            // Determine target state based on the new proxy state
-            val targetEnabled = when (newState) {
-                ProxyState.ENABLED -> true
-                ProxyState.DISABLED -> false
-                ProxyState.NOT_CONFIGURED -> false
-            }
-
-            // Trigger cleanup and reapplication for all open projects with the appropriate target state
-            // Use the silent version to avoid duplicate notifications
-            proxyController.cleanupAndReapplyProxySettingsForAllProjectsSilently(targetEnabled)
-
-            LOG.debug("Cleanup and reapplication completed for HTTP proxy settings change across all projects")
-        } else {
-            LOG.debug("Proxy state unchanged ($newState), skipping cleanup")
+        val currentConfiguration = currentConfiguration()
+        val configurationChanged = currentConfiguration != lastProcessedConfiguration
+        if (lastProcessedState == newState && !configurationChanged) {
+            LOG.debug("Proxy state and configuration unchanged ($newState), skipping cleanup")
+            return
         }
+
+        lastProcessedState = newState
+        lastProcessedConfiguration = currentConfiguration
+        LOG.info("HTTP proxy settings changed, new state: $newState - reapplying configuration for all projects")
+
+        handleProxyBackup(newState)
+
+        // Use the silent version to avoid duplicate notifications
+        proxyController.cleanupAndReapplyProxySettingsForAllProjectsSilently(newState.isProxyActive)
+    }
+
+    /**
+     * Reads the proxy configuration currently held by the IDE, or null when it cannot be read
+     */
+    private fun currentConfiguration(): ProxyConfiguration? = try {
+        ProxySettings.getInstance().getProxyConfiguration()
+    } catch (e: Exception) {
+        LOG.warn("Could not read the current proxy configuration", e)
+        null
     }
 
     /**
@@ -65,32 +75,31 @@ class HttpProxySettingsChangeListener : ProxyStateChangeListener {
      */
     private fun handleProxyBackup(newState: ProxyState) {
         try {
-            val settings = org.holululu.proxythemall.settings.ProxyThemAllSettings.getInstance()
-            val credentialsStorage = org.holululu.proxythemall.services.ProxyCredentialsStorage.getInstance()
-            val proxyInfoExtractor = org.holululu.proxythemall.services.ProxyInfoExtractor.instance
+            val settings = ProxyThemAllSettings.getInstance()
 
             when (newState) {
                 ProxyState.ENABLED -> {
-                    // Extract proxy info on EDT (fast operation)
                     LOG.info("Proxy enabled - backing up configuration to PasswordSafe")
-                    val proxyConfiguration = com.intellij.util.net.ProxySettings.getInstance().getProxyConfiguration()
-                    val proxyInfo = proxyInfoExtractor.extractProxyInfo(proxyConfiguration)
 
-                    if (proxyInfo != null) {
-                        // Move the slow PasswordSafe operation to a background thread to avoid EDT violations
-                        ApplicationManager.getApplication().executeOnPooledThread {
-                            try {
-                                credentialsStorage.saveProxyConfiguration(proxyInfo)
-                                LOG.info("Proxy configuration backed up successfully")
-                            } catch (e: Exception) {
-                                LOG.error("Failed to save proxy configuration to PasswordSafe", e)
+                    // Reading the credential store and writing to PasswordSafe are both slow and
+                    // must not run on the EDT, so extraction happens here too
+                    ApplicationManager.getApplication().executeOnPooledThread {
+                        try {
+                            val proxyInfo = ProxyInfoExtractor.instance
+                                .extractProxyInfo(ProxySettings.getInstance().getProxyConfiguration())
+
+                            if (proxyInfo == null) {
+                                LOG.warn("Could not extract proxy info for backup")
+                                return@executeOnPooledThread
                             }
+
+                            ProxyCredentialsStorage.getInstance().saveProxyConfiguration(proxyInfo)
+                            LOG.info("Proxy configuration backed up successfully")
+                        } catch (e: Exception) {
+                            LOG.warn("Failed to save proxy configuration to PasswordSafe", e)
                         }
-                        // Update flag immediately (fast operation)
-                        settings.lastKnownProxyEnabled = true
-                    } else {
-                        LOG.warn("Could not extract proxy info for backup")
                     }
+                    settings.lastKnownProxyEnabled = true
                 }
 
                 ProxyState.DISABLED, ProxyState.NOT_CONFIGURED -> {
@@ -100,48 +109,20 @@ class HttpProxySettingsChangeListener : ProxyStateChangeListener {
                 }
             }
         } catch (e: Exception) {
-            LOG.error("Failed to handle proxy backup", e)
+            LOG.warn("Failed to handle proxy backup", e)
         }
     }
 
     /**
-     * Directly triggers proxy configuration when settings change
-     */
-    fun onProxySettingsChanged() {
-        LOG.info("Direct proxy settings change detected - triggering immediate configuration")
-
-        // Get current state and trigger configuration
-        val currentState = proxyService.getCurrentProxyState()
-        val targetEnabled = when (currentState) {
-            ProxyState.ENABLED -> true
-            ProxyState.DISABLED -> false
-            ProxyState.NOT_CONFIGURED -> false
-        }
-
-        // Trigger immediate cleanup and reapplication
-        // Use the silent version to avoid duplicate notifications
-        ApplicationManager.getApplication().invokeLater {
-            proxyController.cleanupAndReapplyProxySettingsForAllProjectsSilently(targetEnabled)
-        }
-    }
-
-    /**
-     * Registers this listener with the ProxyStateChangeManager and direct proxy settings listener
+     * Registers this listener with the ProxyStateChangeManager.
+     *
+     * Registration is idempotent, so calling this once per opened project is harmless.
      */
     fun register() {
-        // Register with our polling-based state change manager
+        // IntelliJ provides no proxy settings change topic, so detection is poll based
         ProxyStateChangeManager.instance.addListener(this)
-
-        // Also try to register for direct proxy settings changes
-        try {
-            messageBusConnection = ApplicationManager.getApplication().messageBus.connect()
-            // Note: IntelliJ doesn't provide a direct proxy settings change topic,
-            // so we'll rely on our polling mechanism and manual triggers
-            LOG.debug("HttpProxySettingsChangeListener registered with polling mechanism")
-        } catch (e: Exception) {
-            LOG.warn("Failed to register direct proxy settings listener, using polling only", e)
-        }
-        
+        lastProcessedState = proxyService.getCurrentProxyState()
+        lastProcessedConfiguration = currentConfiguration()
         LOG.debug("HttpProxySettingsChangeListener registered")
     }
 }

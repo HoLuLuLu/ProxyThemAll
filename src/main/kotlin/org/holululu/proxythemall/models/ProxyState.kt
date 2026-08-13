@@ -6,5 +6,11 @@ package org.holululu.proxythemall.models
 enum class ProxyState {
     ENABLED,
     DISABLED,
-    NOT_CONFIGURED
+    NOT_CONFIGURED;
+
+    /**
+     * Whether proxy settings should be applied for this state
+     */
+    val isProxyActive: Boolean
+        get() = this == ENABLED
 }

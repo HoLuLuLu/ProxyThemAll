@@ -5,8 +5,10 @@
     <vendor>holululu</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <!-- Git4Idea is bundled in all IntelliJ-based IDEs and provides the configured git executable.
+         The Gradle plugin is deliberately not required: Gradle support only reads and writes
+         gradle.properties, so it needs no Gradle plugin API. -->
     <depends>Git4Idea</depends>
-    <depends>org.jetbrains.plugins.gradle</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="ProxyThemAll.Notifications" displayType="BALLOON"/>
@@ -16,13 +18,15 @@
                                  instance="org.holululu.proxythemall.settings.ProxyThemAllConfigurable"
                                  id="org.holululu.proxythemall.settings"
                                  displayName="ProxyThemAll"/>
-        <applicationService serviceImplementation="org.holululu.proxythemall.settings.ProxyThemAllSettings"/>
+        <!-- Services are registered via the @Service annotation, not here -->
         <postStartupActivity implementation="org.holululu.proxythemall.services.ProxyThemAllStartupActivity"/>
     </extensions>
 
     <actions>
+        <!-- The text is replaced at runtime with the action the current proxy state allows -->
         <action id="ProxyThemAll.Action" class="org.holululu.proxythemall.actions.ProxyThemAllAction"
-                text="ProxyThemAll" description="ProxyThemAll plugin action">
+                text="Toggle Proxy (ProxyThemAll)"
+                description="Enable or disable the IDE proxy and synchronize Git and Gradle">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
     </actions>

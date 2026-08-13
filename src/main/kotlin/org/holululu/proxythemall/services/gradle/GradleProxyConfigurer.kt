@@ -4,17 +4,19 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vcs.changes.ChangeListManager
+import com.intellij.openapi.vcs.changes.InvokeAfterUpdateMode
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.util.Alarm
+import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.openapi.vfs.VirtualFile
 import org.holululu.proxythemall.models.ProxyInfo
 import org.holululu.proxythemall.settings.ProxyThemAllSettings
 import java.io.File
-
-private const val GRADLE_HOSTS_SEPERATOR = "|"
 
 /**
  * Service responsible for configuring Gradle proxy settings with direct credential support
@@ -31,28 +33,12 @@ class GradleProxyConfigurer {
         private val LOG = Logger.getInstance(GradleProxyConfigurer::class.java)
         private fun getSettings() = ProxyThemAllSettings.getInstance()
 
-        // Gradle proxy properties - using JVM system properties approach
-        private const val HTTP_PROXY_HOST = "systemProp.http.proxyHost"
-        private const val HTTP_PROXY_PORT = "systemProp.http.proxyPort"
-        private const val HTTPS_PROXY_HOST = "systemProp.https.proxyHost"
-        private const val HTTPS_PROXY_PORT = "systemProp.https.proxyPort"
-        private const val HTTP_NON_PROXY_HOSTS = "systemProp.http.nonProxyHosts"
-        private const val HTTPS_NON_PROXY_HOSTS = "systemProp.https.nonProxyHosts"
-
-        // Gradle authentication properties for direct credential support
-        private const val HTTP_PROXY_USER = "systemProp.http.proxyUser"
-        private const val HTTP_PROXY_PASSWORD = "systemProp.http.proxyPassword"
-        private const val HTTPS_PROXY_USER = "systemProp.https.proxyUser"
-        private const val HTTPS_PROXY_PASSWORD = "systemProp.https.proxyPassword"
-
-        // JVM arguments to enable IDE's ProxySelector and Authenticator
-        private const val GRADLE_JVM_ARGS = "org.gradle.jvmargs"
-        private const val PROXY_SELECTOR_ARG = "-Djava.net.useSystemProxies=true"
-
-        // ProxyThemAll managed section markers
-        private const val PROXY_SECTION_START = "# === ProxyThemAll Managed Proxy Settings - START ==="
-        private const val PROXY_SECTION_END = "# === ProxyThemAll Managed Proxy Settings - END ==="
+        // Name of the dedicated changelist that keeps proxy edits out of accidental commits
+        private const val CHANGELIST_NAME = "ProxyThemAll"
     }
+
+    // Serializes read-modify-write cycles; several projects can share ~/.gradle/gradle.properties
+    private val gradleFileLock = Any()
 
     /**
      * Checks if the given project is a Gradle project by looking for Gradle build files
@@ -88,7 +74,7 @@ class GradleProxyConfigurer {
                         if (gradlePropertiesFile != null) {
                             configureProjectGradleProperties(project, gradlePropertiesFile, proxyInfo)
 
-                            val statusMessage = if (hasCredentials(proxyInfo)) {
+                            val statusMessage = if (proxyInfo.hasCredentials) {
                                 "configured for project with authentication"
                             } else {
                                 "configured for project"
@@ -114,7 +100,7 @@ class GradleProxyConfigurer {
                             // Global fallback is enabled - apply to global gradle.properties
                             configureGlobalGradleProperties(proxyInfo)
 
-                            val statusMessage = if (hasCredentials(proxyInfo)) {
+                            val statusMessage = if (proxyInfo.hasCredentials) {
                                 "configured globally with authentication"
                             } else {
                                 "configured globally"
@@ -129,7 +115,7 @@ class GradleProxyConfigurer {
                         }
                     }
                 } catch (e: Exception) {
-                    LOG.error("Failed to set Gradle proxy", e)
+                    LOG.warn("Failed to set Gradle proxy", e)
                     onComplete("configuration failed")
                 }
             }
@@ -181,7 +167,7 @@ class GradleProxyConfigurer {
                         }
                     }
                 } catch (e: Exception) {
-                    LOG.error("Failed to remove Gradle proxy settings", e)
+                    LOG.warn("Failed to remove Gradle proxy settings", e)
                     onComplete("proxy removal failed")
                 }
             }
@@ -189,525 +175,272 @@ class GradleProxyConfigurer {
     }
 
     /**
-     * Removes proxy properties from project gradle.properties using VFS
+     * Removes proxy properties from project gradle.properties through the VFS
      */
     private fun removeProjectGradleProxyProperties(project: Project?, gradlePropertiesFile: File) {
-        project?.let { p ->
-            // Read and prepare the content without proxy settings
-            val existingContent = if (gradlePropertiesFile.exists() && gradlePropertiesFile.length() > 0) {
-                gradlePropertiesFile.readText()
-            } else {
-                ""
-            }
-
-            val contentWithoutProxy = removeProxyThemAllSection(existingContent)
-
-            // Wait for VCS to be ready before performing changelist operations
-            executeWhenVcsReady(p, {
-                try {
-                    // Verify VCS is ready
-                    if (!isVcsReady(p)) {
-                        LOG.warn("VCS not ready for removal, falling back to direct file modification")
-                        removeProxyPropertiesFromFile(gradlePropertiesFile)
-                        return@executeWhenVcsReady
-                    }
-
-                    val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(gradlePropertiesFile)
-
-                    virtualFile?.let { vf ->
-                        // Use WriteCommandAction to modify the file - this properly notifies VCS
-                        WriteCommandAction.runWriteCommandAction(p) {
-                            vf.setBinaryContent(contentWithoutProxy.toByteArray())
-                            LOG.info("Removed proxy settings using WriteCommandAction")
-                        }
-
-                        // Schedule changelist cleanup with a delay to let VCS process the change
-                        ApplicationManager.getApplication().invokeLater({
-                            cleanupProxyThemAllChangelist(project)
-                        }, ModalityState.defaultModalityState())
-                    }
-                } catch (e: Exception) {
-                    LOG.error("Failed to remove proxy settings with VFS", e)
-                }
-            })
-        } ?: run {
+        val p = project ?: run {
             // No project context, use direct file I/O
             removeProxyPropertiesFromFile(gradlePropertiesFile)
+            return
         }
-    }
 
-    /**
-     * Cleans up the ProxyThemAll changelist based on its content:
-     * 1. If empty: removes the changelist
-     * 2. If only whitespace changes: reverts changes and removes the changelist
-     * 3. If real changes unrelated to ProxyThemAll: moves changes to default changelist and removes ProxyThemAll changelist
-     */
-    private fun cleanupProxyThemAllChangelist(project: Project?) {
-        project?.let { p ->
-            ApplicationManager.getApplication().invokeLater({
-                try {
-                    val changeListManager = ChangeListManager.getInstance(p)
-                    val proxyChangelist = changeListManager.findChangeList("ProxyThemAll")
-
-                    proxyChangelist?.let { changelist ->
-                        val changes = changelist.changes.toList()
-
-                        when {
-                            // Case 1: Changelist is empty
-                            changes.isEmpty() -> {
-                                changeListManager.removeChangeList(changelist)
-                                LOG.info("Deleted empty ProxyThemAll changelist")
-                            }
-
-                            // Case 2: Only whitespace/empty line changes
-                            areOnlyWhitespaceChanges(changes) -> {
-                                LOG.info("ProxyThemAll changelist contains only whitespace changes, reverting...")
-
-                                // Rollback the changes
-                                changes.forEach { change ->
-                                    try {
-                                        changeListManager.scheduleAutomaticEmptyChangeListDeletion(changelist)
-                                        // Revert the change by restoring original content
-                                        val virtualFile = change.virtualFile
-                                        if (virtualFile != null && change.beforeRevision != null) {
-                                            WriteCommandAction.runWriteCommandAction(p) {
-                                                val originalContent = change.beforeRevision?.content
-                                                if (originalContent != null) {
-                                                    virtualFile.setBinaryContent(originalContent.toByteArray())
-                                                }
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        LOG.warn("Failed to revert change for file: ${change.virtualFile?.path}", e)
-                                    }
-                                }
-
-                                // After reverting, the changelist should be empty, remove it
-                                if (changelist.changes.isEmpty()) {
-                                    changeListManager.removeChangeList(changelist)
-                                    LOG.info("Reverted whitespace changes and deleted ProxyThemAll changelist")
-                                } else {
-                                    LOG.warn("Some changes could not be reverted, changelist still contains changes")
-                                }
-                            }
-
-                            // Case 3: Real changes unrelated to ProxyThemAll
-                            else -> {
-                                LOG.info("ProxyThemAll changelist contains real changes, moving to default changelist...")
-
-                                val defaultChangelist = changeListManager.defaultChangeList
-
-                                // Move all changes to the default changelist
-                                changes.forEach { change ->
-                                    try {
-                                        changeListManager.moveChangesTo(defaultChangelist, change)
-                                    } catch (e: Exception) {
-                                        LOG.warn(
-                                            "Failed to move change to default changelist: ${change.virtualFile?.path}",
-                                            e
-                                        )
-                                    }
-                                }
-
-                                // After moving, remove the ProxyThemAll changelist
-                                if (changelist.changes.isEmpty()) {
-                                    changeListManager.removeChangeList(changelist)
-                                    LOG.info("Moved changes to default changelist and deleted ProxyThemAll changelist")
-                                } else {
-                                    LOG.warn("Some changes could not be moved, ProxyThemAll changelist still contains changes")
-                                }
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    LOG.warn("Failed to cleanup ProxyThemAll changelist", e)
-                }
-            }, ModalityState.defaultModalityState())
-        }
-    }
-
-    /**
-     * Checks if all changes in the list are only whitespace/empty line changes
-     * Returns true if all changes are whitespace-only, false otherwise
-     */
-    private fun areOnlyWhitespaceChanges(changes: List<com.intellij.openapi.vcs.changes.Change>): Boolean {
-        if (changes.isEmpty()) return false
-
-        return changes.all { change ->
-            try {
-                val beforeContent = change.beforeRevision?.content ?: ""
-                val afterContent = change.afterRevision?.content ?: ""
-
-                // Split into lines and filter out blank lines, then compare
-                val beforeLines = beforeContent.lines().filterNot { it.isBlank() }
-                val afterLines = afterContent.lines().filterNot { it.isBlank() }
-
-                // If the non-blank lines are identical, it's only a whitespace change
-                beforeLines == afterLines
-            } catch (e: Exception) {
-                LOG.warn("Failed to analyze change for file: ${change.virtualFile?.path}", e)
-                // If we can't determine, assume it's a real change to be safe
-                false
-            }
-        }
-    }
-
-    /**
-     * Gets the project-level gradle.properties file
-     */
-    private fun getGradlePropertiesFile(project: Project?): File? {
-        return project?.let { p ->
-            p.basePath?.let { basePath ->
-                File(basePath, "gradle.properties").takeIf {
-                    File(basePath).exists() && File(basePath).isDirectory
-                }
-            }
-        }
-    }
-
-    /**
-     * Gets the global gradle.properties file
-     */
-    private fun getGlobalGradlePropertiesFile(): File {
-        val userHome = System.getProperty("user.home")
-        val gradleDir = File(userHome, ".gradle")
-        if (!gradleDir.exists()) {
-            gradleDir.mkdirs()
-        }
-        return File(gradleDir, "gradle.properties")
-    }
-
-    /**
-     * Checks if VCS and ChangeListManager are ready for operations
-     */
-    private fun isVcsReady(project: Project): Boolean {
-        return try {
-            val changeListManager = ChangeListManager.getInstance(project)
-            // Check if the manager is initialized and has at least the default changelist
-            changeListManager.changeLists.isNotEmpty()
-        } catch (e: Exception) {
-            LOG.warn("VCS not ready: ${e.message}")
-            false
-        }
-    }
-
-    /**
-     * Waits for VCS to be ready and then executes the given action
-     * Uses IntelliJ's Alarm for proper delayed execution without blocking threads
-     */
-    private fun executeWhenVcsReady(project: Project, action: () -> Unit, retryCount: Int = 0) {
-        val maxRetries = 10
-
-        ApplicationManager.getApplication().invokeLater({
-            if (isVcsReady(project)) {
-                // VCS is ready, execute the action
-                action()
-            } else if (retryCount < maxRetries) {
-                // VCS not ready yet, schedule retry after delay using Alarm (non-blocking)
-                val delayMs: Long = (300 * (retryCount + 1)).toLong() // Increasing delay: 300ms, 600ms, 900ms...
-                LOG.info("VCS not ready (attempt ${retryCount + 1}/$maxRetries), retrying in ${delayMs}ms")
-
-                // Create alarm and schedule retry
-                val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD)
-                val nextRetryCount = retryCount + 1
-                alarm.addRequest(
-                    {
-                        try {
-                            executeWhenVcsReady(project, action, nextRetryCount)
-                        } finally {
-                            alarm.dispose()
-                        }
-                    },
-                    delayMs
-                )
-            } else {
-                // Max retries reached, execute action anyway (VCS checks will handle fallback)
-                LOG.warn("VCS not ready after $maxRetries attempts, proceeding anyway")
-                action()
-            }
-        }, ModalityState.defaultModalityState())
+        writeThroughChangelist(
+            project = p,
+            file = gradlePropertiesFile,
+            createIfMissing = false,
+            transform = GradlePropertiesText::removeManagedSection,
+            afterMove = { cleanupProxyThemAllChangelist(p) }
+        )
     }
 
     /**
      * Configures project-level gradle.properties file
      */
     private fun configureProjectGradleProperties(project: Project?, gradlePropertiesFile: File, proxyInfo: ProxyInfo) {
-        project?.let { p ->
-            // Prepare the new content
-            val newContent = buildGradlePropertiesContent(gradlePropertiesFile, proxyInfo)
-
-            // Wait for VCS to be ready before performing changelist operations
-            executeWhenVcsReady(p, {
-                try {
-                    val changeListManager = ChangeListManager.getInstance(p)
-
-                    // Verify VCS is still ready
-                    if (!isVcsReady(p)) {
-                        LOG.warn("VCS not ready for changelist operations, falling back to direct file modification")
-                        configureGradlePropertiesFile(gradlePropertiesFile, proxyInfo)
-                        return@executeWhenVcsReady
-                    }
-
-                    val originalActiveList = changeListManager.defaultChangeList
-
-                    // Find or create ProxyThemAll changelist
-                    var proxyChangelist = changeListManager.findChangeList("ProxyThemAll")
-                    if (proxyChangelist == null) {
-                        proxyChangelist = changeListManager.addChangeList(
-                            "ProxyThemAll",
-                            "Proxy configuration changes managed by ProxyThemAll plugin. Do not commit these changes."
-                        )
-                        LOG.info("Created ProxyThemAll changelist")
-                    }
-
-                    // Switch to ProxyThemAll as active BEFORE modifying file
-                    changeListManager.defaultChangeList = proxyChangelist
-                    LOG.info("Switched to ProxyThemAll changelist as active")
-
-                    try {
-                        // Get or create the virtual file
-                        var virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(gradlePropertiesFile)
-                        if (virtualFile == null) {
-                            // File doesn't exist, create it first
-                            gradlePropertiesFile.createNewFile()
-                            virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(gradlePropertiesFile)
-                        }
-
-                        virtualFile?.let { vf ->
-                            // Use WriteCommandAction to modify the file - this is the proper IntelliJ way
-                            WriteCommandAction.runWriteCommandAction(p) {
-                                vf.setBinaryContent(newContent.toByteArray())
-                                LOG.info("Modified gradle.properties using WriteCommandAction while ProxyThemAll is active")
-                            }
-                        }
-                    } finally {
-                        // Always restore original active changelist
-                        changeListManager.defaultChangeList = originalActiveList
-                        LOG.info("Restored original active changelist")
-                    }
-                } catch (e: Exception) {
-                    LOG.error("Failed to configure gradle.properties with changelist management", e)
-                }
-            })
-        } ?: run {
+        val p = project ?: run {
             // No project context, just modify the file normally
             configureGradlePropertiesFile(gradlePropertiesFile, proxyInfo)
+            return
         }
+
+        writeThroughChangelist(
+            project = p,
+            file = gradlePropertiesFile,
+            createIfMissing = true,
+            transform = { GradlePropertiesText.withProxySection(it, proxyInfo) }
+        )
     }
 
     /**
-     * Builds the complete gradle.properties file content
+     * Writes the given content to a file and files the resulting change under the ProxyThemAll
+     * changelist.
+     *
+     * The change is moved after ChangeListManager's refresh rather than by switching the user's
+     * default changelist: change-to-list assignment happens asynchronously, so switching the
+     * default list around the write is a race that files the change in the user's own list.
+     *
+     * Callers run on a background thread (Task.Backgroundable), so the blocking file and VFS work
+     * happens there and only the write command is dispatched to the EDT.
      */
-    private fun buildGradlePropertiesContent(gradlePropertiesFile: File, proxyInfo: ProxyInfo): String {
-        // Read existing content if file exists
-        val existingContent = if (gradlePropertiesFile.exists() && gradlePropertiesFile.length() > 0) {
-            gradlePropertiesFile.readText()
-        } else {
-            ""
+    // Document.setText must be called as a method: getText returns String while setText takes
+    // CharSequence, so Kotlin exposes `text` as a val and the IDE's property-access suggestion
+    // does not compile.
+    @Suppress("UsePropertyAccessSyntax")
+    private fun writeThroughChangelist(
+        project: Project,
+        file: File,
+        createIfMissing: Boolean,
+        transform: (String) -> String,
+        afterMove: () -> Unit = {}
+    ) {
+        // Resolve and create the file off the EDT; only the write command needs it
+        val virtualFile = try {
+            findOrCreateVirtualFile(file, createIfMissing)
+        } catch (e: Exception) {
+            LOG.warn("Could not resolve ${file.path} in the VFS", e)
+            null
         }
 
-        // Remove any existing ProxyThemAll section from the existing content
-        val contentWithoutProxy = removeProxyThemAllSection(existingContent)
-
-        // Build new proxy settings
-        val proxySettings = buildProxySettingsContent(proxyInfo)
-
-        // Combine
-        return if (contentWithoutProxy.isBlank()) {
-            proxySettings
-        } else {
-            val separator = if (contentWithoutProxy.endsWith("\n")) "\n" else "\n\n"
-            contentWithoutProxy + separator + proxySettings
+        if (virtualFile == null) {
+            LOG.warn("No VFS entry for ${file.path}, writing directly")
+            synchronized(gradleFileLock) { file.writeText(transform(readFileOrEmpty(file))) }
+            return
         }
+
+        ApplicationManager.getApplication().invokeLater({
+            if (project.isDisposed) return@invokeLater
+
+            try {
+                val documentManager = FileDocumentManager.getInstance()
+                val document = documentManager.getCachedDocument(virtualFile)
+
+                if (document != null) {
+                    // The file is open in an editor. Its document is the authoritative content -
+                    // reading the VFS would miss unsaved edits, and writing the VFS would later be
+                    // overwritten when the still-dirty document is saved.
+                    val newContent = transform(document.text)
+                    WriteCommandAction.runWriteCommandAction(project) {
+                        document.setText(newContent)
+                        documentManager.saveDocument(document)
+                    }
+                    LOG.info("Wrote ${file.name} through its open document")
+                } else {
+                    // Read through the VFS so read and write agree on content and charset
+                    val newContent = transform(VfsUtilCore.loadText(virtualFile))
+                    WriteCommandAction.runWriteCommandAction(project) {
+                        VfsUtil.saveText(virtualFile, newContent)
+                    }
+                    LOG.info("Wrote ${file.name} through the VFS")
+                }
+
+                moveToProxyChangelist(project, virtualFile, afterMove)
+            } catch (e: Exception) {
+                LOG.warn("Failed to write ${file.name} with changelist management", e)
+            }
+        }, ModalityState.defaultModalityState())
     }
 
     /**
-     * Removes ProxyThemAll section from content string
+     * Resolves the file in the VFS, optionally creating it first.
+     *
+     * File creation and VFS refresh are blocking, so they run off the EDT.
      */
-    private fun removeProxyThemAllSection(content: String): String {
-        if (content.isBlank()) return content
-
-        val lines = content.lines().toMutableList()
-        var startIndex = -1
-        var endIndex = -1
-
-        // Find the ProxyThemAll managed section
-        for (i in lines.indices) {
-            val line = lines[i].trim()
-            if (line == PROXY_SECTION_START) {
-                startIndex = maxOf(0, i - 1)
-            } else if (line == PROXY_SECTION_END && startIndex != -1) {
-                endIndex = i
-                break
+    private fun findOrCreateVirtualFile(file: File, createIfMissing: Boolean): VirtualFile? {
+        if (createIfMissing && !file.exists()) {
+            synchronized(gradleFileLock) {
+                if (!file.exists()) {
+                    file.parentFile?.mkdirs()
+                    file.createNewFile()
+                }
             }
         }
 
-        // Remove the managed section if found
-        if (startIndex != -1 && endIndex != -1) {
-            for (i in endIndex downTo startIndex) {
-                lines.removeAt(i)
-            }
-        }
-
-        return lines.joinToString("\n")
+        return LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
     }
+
+    /**
+     * Moves the change for the given file into the ProxyThemAll changelist once VCS has
+     * registered it.
+     */
+    private fun moveToProxyChangelist(project: Project, virtualFile: VirtualFile, afterMove: () -> Unit) {
+        val changeListManager = ChangeListManager.getInstance(project)
+
+        if (!changeListManager.areChangeListsEnabled()) {
+            LOG.debug("Changelists are not enabled for ${project.name}, skipping changelist management")
+            return
+        }
+
+        // invokeAfterUpdate waits for the change to actually exist before we try to move it
+        changeListManager.invokeAfterUpdate(
+            {
+                if (project.isDisposed) return@invokeAfterUpdate
+
+                try {
+                    val change = changeListManager.getChange(virtualFile)
+                    if (change == null) {
+                        LOG.debug("No VCS change recorded for ${virtualFile.name}, nothing to file")
+                    } else {
+                        val proxyChangelist = changeListManager.findChangeList(CHANGELIST_NAME)
+                            ?: changeListManager.addChangeList(
+                                CHANGELIST_NAME,
+                                "Proxy configuration changes managed by ProxyThemAll plugin. " +
+                                        "Do not commit these changes."
+                            ).also { LOG.info("Created ProxyThemAll changelist") }
+
+                        changeListManager.moveChangesTo(proxyChangelist, change)
+                        LOG.info("Filed ${virtualFile.name} under the ProxyThemAll changelist")
+                    }
+
+                    afterMove()
+                } catch (e: Exception) {
+                    LOG.warn("Failed to file the change under the ProxyThemAll changelist", e)
+                }
+            },
+            InvokeAfterUpdateMode.SILENT,
+            null,
+            ModalityState.defaultModalityState()
+        )
+    }
+
+    /**
+     * Removes the ProxyThemAll changelist once it is empty.
+     *
+     * Emptiness is only meaningful after a ChangeListManager refresh, so the check runs inside
+     * invokeAfterUpdate. Changes that are not ours are moved back to the default list instead of
+     * being reverted - reverting risked destroying concurrent user edits.
+     */
+    private fun cleanupProxyThemAllChangelist(project: Project) {
+        val changeListManager = ChangeListManager.getInstance(project)
+        if (!changeListManager.areChangeListsEnabled()) return
+
+        changeListManager.invokeAfterUpdate(
+            {
+                if (project.isDisposed) return@invokeAfterUpdate
+
+                try {
+                    val changelist = changeListManager.findChangeList(CHANGELIST_NAME) ?: return@invokeAfterUpdate
+                    val changes = changelist.changes.toList()
+
+                    if (changes.isEmpty()) {
+                        changeListManager.removeChangeList(changelist)
+                        LOG.info("Deleted empty ProxyThemAll changelist")
+                        return@invokeAfterUpdate
+                    }
+
+                    LOG.info("ProxyThemAll changelist still holds ${changes.size} change(s), moving them to the default list")
+                    changeListManager.moveChangesTo(changeListManager.defaultChangeList, changes)
+
+                    // Let the platform drop the list as soon as the move has been processed
+                    changeListManager.scheduleAutomaticEmptyChangeListDeletion(changelist)
+                } catch (e: Exception) {
+                    LOG.warn("Failed to cleanup ProxyThemAll changelist", e)
+                }
+            },
+            InvokeAfterUpdateMode.SILENT,
+            null,
+            ModalityState.defaultModalityState()
+        )
+    }
+
+    /**
+     * Gets the project-level gradle.properties file
+     */
+    private fun getGradlePropertiesFile(project: Project?): File? {
+        val basePath = project?.basePath ?: return null
+        val baseDir = File(basePath)
+        return if (baseDir.isDirectory) File(baseDir, "gradle.properties") else null
+    }
+
+    /**
+     * Gets the global gradle.properties file, honouring GRADLE_USER_HOME.
+     *
+     * Does not create the directory: this is a read path, and callers that write go through
+     * findOrCreateVirtualFile.
+     */
+    private fun getGlobalGradlePropertiesFile(): File {
+        val gradleUserHome = System.getenv("GRADLE_USER_HOME")?.takeIf { it.isNotBlank() }
+        val gradleDir = gradleUserHome?.let { File(it) } ?: File(System.getProperty("user.home"), ".gradle")
+        return File(gradleDir, "gradle.properties")
+    }
+
 
     /**
      * Configures global gradle.properties file
      */
     private fun configureGlobalGradleProperties(proxyInfo: ProxyInfo) {
-        val gradlePropertiesFile = getGlobalGradlePropertiesFile()
-        configureGradlePropertiesFile(gradlePropertiesFile, proxyInfo)
+        configureGradlePropertiesFile(getGlobalGradlePropertiesFile(), proxyInfo)
     }
 
     /**
      * Configures gradle.properties file while preserving existing content and structure
      */
     private fun configureGradlePropertiesFile(gradlePropertiesFile: File, proxyInfo: ProxyInfo) {
-        // First, remove any existing ProxyThemAll managed settings
-        removeProxyThemAllManagedSettings(gradlePropertiesFile)
-
-        // Then append new proxy settings at the end
-        appendProxySettings(gradlePropertiesFile, proxyInfo)
-    }
-
-    /**
-     * Checks if proxy info contains credentials
-     */
-    private fun hasCredentials(proxyInfo: ProxyInfo): Boolean {
-        return !proxyInfo.username.isNullOrBlank() && !proxyInfo.password.isNullOrBlank()
+        val newContent = GradlePropertiesText.withProxySection(readFileOrEmpty(gradlePropertiesFile), proxyInfo)
+        gradlePropertiesFile.writeText(newContent)
+        LOG.info("Wrote ProxyThemAll managed proxy settings to ${gradlePropertiesFile.name}")
     }
 
     /**
      * Removes proxy properties from a gradle.properties file while preserving structure
+     *
+     * @return true when the file content actually changed
      */
     private fun removeProxyPropertiesFromFile(gradlePropertiesFile: File): Boolean {
         if (!gradlePropertiesFile.exists()) {
             return false
         }
 
-        // Use the new structure-preserving method
         val originalContent = gradlePropertiesFile.readText()
-        removeProxyThemAllManagedSettings(gradlePropertiesFile)
-        val newContent = gradlePropertiesFile.readText()
-
-        // Return true if content was actually changed
-        return originalContent != newContent
-    }
-
-    /**
-     * Removes ProxyThemAll managed settings from the gradle.properties file while preserving structure
-     */
-    private fun removeProxyThemAllManagedSettings(gradlePropertiesFile: File) {
-        if (!gradlePropertiesFile.exists()) {
-            return
-        }
-
-        val lines = gradlePropertiesFile.readLines().toMutableList()
-        var startIndex = -1
-        var endIndex = -1
-
-        // Find the ProxyThemAll managed section
-        for (i in lines.indices) {
-            val line = lines[i].trim()
-            if (line == PROXY_SECTION_START) {
-                startIndex = i - 1
-            } else if (line == PROXY_SECTION_END && startIndex != -1) {
-                endIndex = i
-                break
-            }
-        }
-
-        // Remove the managed section if found
-        if (startIndex != -1 && endIndex != -1) {
-            // Remove from end to start to maintain indices
-            for (i in endIndex downTo startIndex) {
-                lines.removeAt(i)
-            }
-
-            // Write the modified content back to the file
-            gradlePropertiesFile.writeText(lines.joinToString("\n"))
-            LOG.info("Removed existing ProxyThemAll managed proxy settings")
-        }
-    }
-
-    /**
-     * Appends proxy settings to the gradle.properties file with proper commenting
-     */
-    private fun appendProxySettings(gradlePropertiesFile: File, proxyInfo: ProxyInfo) {
-        val proxySettings = buildProxySettingsContent(proxyInfo)
-
-        // Ensure the file exists
-        if (!gradlePropertiesFile.exists()) {
-            gradlePropertiesFile.createNewFile()
-        }
-
-        // Read existing content
-        val existingContent = if (gradlePropertiesFile.length() > 0) {
-            gradlePropertiesFile.readText()
-        } else {
-            ""
-        }
-
-        // Append proxy settings with proper spacing
-        val newContent = if (existingContent.isBlank()) {
-            proxySettings
-        } else {
-            val separator = if (existingContent.endsWith("\n")) "\n" else "\n\n"
-            existingContent + separator + proxySettings
+        val newContent = GradlePropertiesText.removeManagedSection(originalContent)
+        if (originalContent == newContent) {
+            return false
         }
 
         gradlePropertiesFile.writeText(newContent)
-        LOG.info("Appended ProxyThemAll managed proxy settings to gradle.properties")
+        LOG.info("Removed existing ProxyThemAll managed proxy settings")
+        return true
     }
 
-    /**
-     * Builds the proxy settings content with proper formatting and comments
-     */
-    private fun buildProxySettingsContent(proxyInfo: ProxyInfo): String {
-        val content = StringBuilder()
-
-        // Add section start marker
-        content.appendLine(PROXY_SECTION_START)
-        content.appendLine("# These settings are automatically managed by ProxyThemAll plugin")
-        content.appendLine("# Manual changes to this section will be overwritten")
-        content.appendLine()
-
-        // Add proxy host and port settings
-        content.appendLine("# HTTP Proxy Configuration")
-        content.appendLine("$HTTP_PROXY_HOST=${proxyInfo.host}")
-        content.appendLine("$HTTP_PROXY_PORT=${proxyInfo.port}")
-        content.appendLine()
-
-        content.appendLine("# HTTPS Proxy Configuration")
-        content.appendLine("$HTTPS_PROXY_HOST=${proxyInfo.host}")
-        content.appendLine("$HTTPS_PROXY_PORT=${proxyInfo.port}")
-        content.appendLine()
-
-        // Builds the non-proxy hosts configuration and formats them for Gradle (pipe-separated)
-        val nonProxyHosts = proxyInfo.nonProxyHosts.joinToString(GRADLE_HOSTS_SEPERATOR)
-
-        // Add non-proxy hosts
-        content.appendLine("# Non-proxy hosts (pipe-separated)")
-        content.appendLine("$HTTP_NON_PROXY_HOSTS=$nonProxyHosts")
-        content.appendLine("$HTTPS_NON_PROXY_HOSTS=$nonProxyHosts")
-        content.appendLine()
-
-        // Add authentication if available
-        if (hasCredentials(proxyInfo)) {
-            content.appendLine("# Proxy Authentication")
-            content.appendLine("$HTTP_PROXY_USER=${proxyInfo.username}")
-            content.appendLine("$HTTP_PROXY_PASSWORD=${proxyInfo.password}")
-            content.appendLine("$HTTPS_PROXY_USER=${proxyInfo.username}")
-            content.appendLine("$HTTPS_PROXY_PASSWORD=${proxyInfo.password}")
-        } else {
-            content.appendLine("# JVM arguments for IDE ProxySelector/Authenticator fallback")
-            content.appendLine("$GRADLE_JVM_ARGS=$PROXY_SELECTOR_ARG")
-        }
-
-        content.appendLine()
-        content.append(PROXY_SECTION_END)
-
-        return content.toString()
-    }
+    private fun readFileOrEmpty(file: File): String =
+        if (file.exists() && file.length() > 0) file.readText() else ""
 }

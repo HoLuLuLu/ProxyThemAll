@@ -63,7 +63,7 @@ class GitProxyService(
                 }
             }
         } catch (e: Exception) {
-            LOG.error("Failed to configure Git proxy", e)
+            LOG.warn("Failed to configure Git proxy", e)
             onComplete("Git proxy configuration failed")
         }
     }

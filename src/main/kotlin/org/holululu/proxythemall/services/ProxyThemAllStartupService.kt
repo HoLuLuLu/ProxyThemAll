@@ -3,8 +3,14 @@ package org.holululu.proxythemall.services
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.util.Disposer
+import com.intellij.util.net.ProxySettings
 import org.holululu.proxythemall.core.ProxyController
 import org.holululu.proxythemall.listeners.HttpProxySettingsChangeListener
+import org.holululu.proxythemall.listeners.ProxyStateChangeManager
+import org.holululu.proxythemall.models.ProxyState
+import org.holululu.proxythemall.settings.ProxyThemAllSettings
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Startup service that initializes ProxyThemAll plugin components
@@ -25,12 +31,28 @@ class ProxyThemAllStartupService {
         }
     }
 
+    // The startup activity runs once per project, but this setup is application wide
+    private val initialized = AtomicBoolean(false)
+
     /**
-     * Performs initial setup when called by the startup activity
+     * Performs initial setup when called by the startup activity.
+     *
+     * Only the first call does any work; subsequent projects opening reuse the same state.
      */
     fun performInitialSetup() {
+        if (!initialized.compareAndSet(false, true)) {
+            LOG.debug("ProxyThemAll initial setup already performed, skipping")
+            return
+        }
+
         try {
             LOG.info("Performing initial setup for ProxyThemAll plugin")
+
+            // Tie the polling task's lifetime to the application so it cannot outlive the plugin
+            Disposer.register(ApplicationManager.getApplication(), ProxyStateChangeManager.instance)
+
+            // Register the listener that reacts to proxy settings changes
+            HttpProxySettingsChangeListener.instance.register()
 
             // Handle proxy backup and restore logic
             handleProxyBackupAndRestore()
@@ -41,7 +63,7 @@ class ProxyThemAllStartupService {
 
             LOG.info("ProxyThemAll plugin initial setup completed successfully")
         } catch (e: Exception) {
-            LOG.error("Failed to perform initial setup for ProxyThemAll plugin", e)
+            LOG.warn("Failed to perform initial setup for ProxyThemAll plugin", e)
         }
     }
 
@@ -50,20 +72,18 @@ class ProxyThemAllStartupService {
      */
     private fun handleProxyBackupAndRestore() {
         try {
-            val proxyService = ProxyService.instance
-            val currentState = proxyService.getCurrentProxyState()
-            val settings = org.holululu.proxythemall.settings.ProxyThemAllSettings.getInstance()
+            val currentState = ProxyService.instance.getCurrentProxyState()
+            val settings = ProxyThemAllSettings.getInstance()
             val credentialsStorage = ProxyCredentialsStorage.getInstance()
-            val proxyInfoExtractor = ProxyInfoExtractor.instance
 
             LOG.info("Handling proxy backup and restore: currentState=$currentState, lastKnownProxyEnabled=${settings.lastKnownProxyEnabled}")
 
             when (currentState) {
-                org.holululu.proxythemall.models.ProxyState.ENABLED -> {
+                ProxyState.ENABLED -> {
                     // Backup current IntelliJ proxy to PasswordSafe
                     LOG.info("Proxy is currently enabled - backing up to PasswordSafe")
-                    val proxyConfiguration = com.intellij.util.net.ProxySettings.getInstance().getProxyConfiguration()
-                    val proxyInfo = proxyInfoExtractor.extractProxyInfo(proxyConfiguration)
+                    val proxyConfiguration = ProxySettings.getInstance().getProxyConfiguration()
+                    val proxyInfo = ProxyInfoExtractor.instance.extractProxyInfo(proxyConfiguration)
 
                     if (proxyInfo != null) {
                         credentialsStorage.saveProxyConfiguration(proxyInfo)
@@ -74,7 +94,7 @@ class ProxyThemAllStartupService {
                     }
                 }
 
-                org.holululu.proxythemall.models.ProxyState.NOT_CONFIGURED -> {
+                ProxyState.NOT_CONFIGURED -> {
                     if (settings.lastKnownProxyEnabled && credentialsStorage.hasStoredConfiguration()) {
                         // Auto-restore from PasswordSafe
                         LOG.info("Proxy not configured but was previously enabled - attempting auto-restore")
@@ -91,19 +111,22 @@ class ProxyThemAllStartupService {
                     }
                 }
 
-                org.holululu.proxythemall.models.ProxyState.DISABLED -> {
+                ProxyState.DISABLED -> {
                     LOG.debug("Proxy is explicitly disabled - updating state flag")
                     settings.lastKnownProxyEnabled = false
                 }
             }
         } catch (e: Exception) {
-            LOG.error("Failed to handle proxy backup and restore", e)
+            LOG.warn("Failed to handle proxy backup and restore", e)
         }
     }
 
     /**
-     * Performs cleanup and reapplication of proxy settings on IDE startup
-     * Uses invokeLater to ensure the operation happens after startup is complete
+     * Performs cleanup and reapplication of proxy settings on IDE startup.
+     *
+     * Deliberately silent: startup only reconciles the existing configuration, the user did not
+     * toggle anything, so there is nothing to announce. The noisy variant would show a balloon on
+     * every launch - including "Proxy Disabled" to users who never configured a proxy at all.
      */
     private fun performStartupCleanup() {
         try {
@@ -112,33 +135,16 @@ class ProxyThemAllStartupService {
             // Schedule cleanup to run after startup completes
             // This gives time for VCS and other subsystems to initialize
             ApplicationManager.getApplication().invokeLater {
-                performStartupCleanupForProjects()
+                try {
+                    val targetEnabled = ProxyService.instance.getCurrentProxyState().isProxyActive
+                    ProxyController.instance.cleanupAndReapplyProxySettingsForAllProjectsSilently(targetEnabled)
+                    LOG.info("Startup cleanup and reapplication completed successfully for all projects")
+                } catch (e: Exception) {
+                    LOG.warn("Failed to perform startup cleanup", e)
+                }
             }
-
-            LOG.info("Startup cleanup scheduled successfully")
         } catch (e: Exception) {
-            LOG.error("Failed to schedule startup cleanup", e)
-        }
-    }
-
-    /**
-     * Actually performs the cleanup and reapplication for all projects
-     */
-    private fun performStartupCleanupForProjects() {
-        try {
-            LOG.info("Performing startup cleanup and reapplication of proxy settings for all projects")
-
-            // Trigger cleanup and reapplication for all open projects
-            // This ensures all proxy configurations (IDE, Git, Gradle) are in sync across all projects
-            ProxyController.instance.cleanupAndReapplyProxySettings()
-
-            // Also trigger immediate proxy configuration check
-            // This handles cases where proxy was manually configured before plugin startup
-            HttpProxySettingsChangeListener.instance.onProxySettingsChanged()
-
-            LOG.info("Startup cleanup and reapplication completed successfully for all projects")
-        } catch (e: Exception) {
-            LOG.error("Failed to perform startup cleanup", e)
+            LOG.warn("Failed to schedule startup cleanup", e)
         }
     }
 }
