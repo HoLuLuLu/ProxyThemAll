@@ -10,6 +10,9 @@ This vault is an LLM-maintained knowledge base about the **ProxyThemAll** Intell
 the [LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) pattern. Read this
 file first in any session that touches the vault.
 
+Working on the *plugin* rather than the vault? Start at the repository root `CLAUDE.md`, which covers
+build commands, architecture and the codebase-specific rules, and links back here.
+
 ## Three layers
 
 | Layer | Location | Who owns it |
