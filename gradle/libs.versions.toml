@@ -2,7 +2,7 @@
 # libraries
 junit = "6.1.3"
 junit4 = "4.13.2" # Runtime-only: IntelliJ Platform test framework's JUnit5TestSessionListener needs junit.framework.TestCase
-kotlinxSerialization = "1.11.0"
+kotlinxSerialization = "1.12.0"
 
 # plugins
 changelog = "2.5.0"
