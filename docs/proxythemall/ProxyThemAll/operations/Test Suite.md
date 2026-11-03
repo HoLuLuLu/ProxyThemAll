@@ -35,11 +35,11 @@ Was 65 — the three new tests all landed in `GradlePropertiesTextTest` with
 JUnit 5 Jupiter **only** in test sources. ✅ `grep -rn "org.junit.Test\|junit.framework\|
 org.junit.Assert" src/test/` → 0 hits.
 
-`junit4` 4.13.2 is a declared dependency but `testRuntimeOnly` (`build.gradle.kts:42`) and is used
+`junit4` 4.13.2 is a declared dependency but `testRuntimeOnly` (`build.gradle.kts:43`) and is used
 by **no test**. It exists because `com.intellij.tests.JUnit5TestSessionListener` — a
 `LauncherSessionListener` that `testFramework(Platform)` registers automatically — needs
 `junit.framework.TestCase` on the runtime classpath or the test JVM refuses to start. The reason is
-written down at `build.gradle.kts:39-41` and in `gradle/libs.versions.toml:4`. Do not "clean up"
+written down at `build.gradle.kts:40-42` and in `gradle/libs.versions.toml:4`. Do not "clean up"
 this dependency.
 
 ✅ No mocking framework and no platform test fixtures at all: `grep -rn

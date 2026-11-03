@@ -3,7 +3,7 @@ type: concept
 status: current
 tags: [platform-api, bytecode, kotlin, vcs, git, properties, lessons]
 verified: 2026-11-03
-verified-against: e6c7763
+verified-against: 1885550
 ---
 
 # Platform API Constraints
@@ -109,7 +109,7 @@ public abstract void setProxyConfiguration(ProxyConfiguration);
 EAP build now in the default `recommended()` selection (`IU-263.7307.112`, see [[Build Gates]]):
 
 ```
-Internal method com.intellij.util.net.ProxySettings.setProxyConfiguration(ProxyConfiguration arg0) : void
+Internal method com.intellij.util.net.ProxySettings.setProxyConfiguration(com.intellij.util.net.ProxyConfiguration arg0) : void
 is invoked in org.holululu.proxythemall.services.ProxyService.disableProxy(ProxySettings) : void.
 This method is marked with @org.jetbrains.annotations.ApiStatus.Internal annotation ...
 ```
@@ -154,16 +154,29 @@ Suppressed deliberately at class level: `@Suppress("UnstableApiUsage")` on `Prox
 different type and never reaches that filter, so the ignore-file mechanism used for item 11 below
 cannot tolerate these five lines. Instead, `build.gradle.kts:120` sets
 `failureLevel = listOf(FailureLevel.COMPATIBILITY_PROBLEMS, FailureLevel.OVERRIDE_ONLY_API_USAGES)` —
-deliberately *excluding* `FailureLevel.INTERNAL_API_USAGES` (confirmed present in the enum via
-`javap` against `intellij-platform-gradle-plugin-2.19.0.jar`) — and a `doLast` on `tasks.verifyPlugin`
+deliberately *excluding* `FailureLevel.INTERNAL_API_USAGES`, which IntelliJ Platform Gradle Plugin
+2.19.0's own default already includes: ✅ `IntelliJPlatformExtension.kt`'s
+`failureLevel.convention(listOf(FailureLevel.COMPATIBILITY_PROBLEMS, FailureLevel.INTERNAL_API_USAGES,
+FailureLevel.OVERRIDE_ONLY_API_USAGES))`, read from the plugin's own source (not recalled as `ALL`,
+which this section previously and wrongly claimed) — and a `doLast` on `tasks.verifyPlugin`
 (`build.gradle.kts:168-202`) re-implements the gate by hand: it walks every `internal-api-usages.txt`
 under the verification reports directory and throws `Unexpected internal API usages (only the 5
 grandfathered setProxyConfiguration call sites are allowed): ...` (message at `build.gradle.kts:197`)
 unless every line names one of the five callers in the `allowedCallers` list
-(`build.gradle.kts:173-179`). A sixth usage anywhere, or a changed caller name, fails the build.
-**Before Task 1 added this guard, the IntelliJ Platform Gradle Plugin's own default `failureLevel`
-(`ALL`) would have failed the build on the first internal usage** — that is the belief the old
-wording of this section recorded; it was correct until the override above replaced it.
+(`build.gradle.kts:173-179`).
+
+The guarantee this gives is narrower than "a sixth usage anywhere fails." ⚠️ By reviewer `javap`
+against Plugin Verifier 1.411, `InternalMethodUsage` equality (and the `Set`-like collection it is
+deduplicated through — inferred from the output shape, not executed) covers only the API element and
+the *usage location*, and a usage location is a calling **method**, with no line number. A second call
+to `setProxyConfiguration` added inside one of the five already-allowed methods therefore produces no
+new report line — it is invisible to this guard, and, since Marketplace review runs the same verifier,
+also invisible to Marketplace. What does fail the build is a usage reported from any **new or renamed
+calling method**: that method is a different usage location, so it is neither in `allowedCallers` nor
+accounted for by the existing five lines. The `lines.size > 5` check (`build.gradle.kts:186-188`) stays
+in `build.gradle.kts` as a backstop for this: it does not catch an extra call hidden inside an
+already-allowed method, but it does catch the case where the inferred dedup-by-method behaviour above
+is wrong, or a future verifier release starts reporting per-call-site instead of per-method.
 
 ⚠️ **Marketplace policy — JetBrains staff forum statements, not written policy** (all
 platform.jetbrains.com, staff member yuriy.artamonov):

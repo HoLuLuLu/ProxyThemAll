@@ -3,15 +3,15 @@ type: concept
 status: current
 tags: [lifecycle, disposer, threading, edt, memory-leak, platform-api]
 verified: 2026-11-03
-verified-against: e6c7763
+verified-against: 1885550
 ---
 
 # Lifecycle and Leaks
 
 What owns what, when it dies, and which thread it may run on. The plugin declares itself
 dynamically loadable — the verifier prints *"Plugin can probably be enabled or disabled without IDE
-restart"* on all seven checked IDEs, including `IU-263.7307.112` ([[Build Gates]]) — which makes
-every registration a potential leak.
+restart"* on all seven checked IDEs; ⚠️ on `IU-263.7307.112` specifically this is console output that
+was not individually re-checked ([[Build Gates]]) — which makes every registration a potential leak.
 
 ## Ownership: the manager is tied to the Application
 

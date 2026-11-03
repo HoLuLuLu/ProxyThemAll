@@ -3,7 +3,7 @@ type: index
 status: current
 tags: [defects, register, audit]
 verified: 2026-11-03
-verified-against: e6c7763
+verified-against: 1885550
 ---
 
 # Defect Register
@@ -100,8 +100,8 @@ grandfathering is expected to end roughly one major release after 2026.3.
 After that point, new plugin uploads may be rejected outright unless JetBrains ships a public,
 non-internal setter — there is currently no such alternative (`HttpConfigurable` is
 `@Deprecated(forRemoval = true)`; `ProxySettingsOverrideProvider` solves a different problem; see §3
-for both). No code fix is possible today. Mitigation: a forum/YouTrack request asking JetBrains for a
-public API, tracked as Task 3 of this work.
+for both). No code fix is possible today. Mitigation: file a forum/YouTrack request asking JetBrains
+for a public, non-internal API.
 
 ### ⚠️ 2026.3 VCS content-module resolution is untested in a real sandbox — OPEN, no automated guard
 
@@ -118,8 +118,9 @@ dependency declaration is wrong in some way the reasoning missed, the failure mo
 `NoClassDefFoundError` at runtime the first time a user with a 2026.3 IDE enables Gradle proxy support
 — silent until then, since nothing local would catch it.
 
-Mitigation: manual `runIde` against `IU-263.7307.112`, exercising the changelist move/cleanup path and
-checking `idea.log` for the error — `docs/VERIFICATION.md` §6.6.
+Mitigation: build the plugin zip and install it from disk into a real 2026.3 EAP (not `runIde`, which
+would recompile against 263 instead of testing the shipped artifact), exercising the changelist
+move/cleanup path and checking `idea.log` for the error — `docs/VERIFICATION.md` §6.6.
 
 ### ⚠️ git may ignore `http.noproxy` entirely — UNCONFIRMED, needs a second git build
 

@@ -3,7 +3,7 @@ type: operation
 status: current
 tags: [build, gradle, ci, verifier, coverage]
 verified: 2026-11-03
-verified-against: e6c7763
+verified-against: 1885550
 ---
 
 # Build Gates
@@ -45,7 +45,7 @@ new ones arrived with [[SOCKS Bypass Hosts Ignored]].)
 
 ### Kover
 
-`build.gradle.kts:127-146`:
+`build.gradle.kts:133-153`:
 
 | Setting | Value |
 |---|---|
@@ -54,7 +54,7 @@ new ones arrived with [[SOCKS Bypass Hosts Ignored]].)
 | `coverageUnits` | `CoverageUnit.LINE` |
 
 ✅ Actual total from `build/reports/kover/report.xml`: LINE `covered=298 missed=825` → **26.54 %**.
-6.5 points of headroom over the floor. The comment at `build.gradle.kts:134-135` states the intent
+6.5 points of headroom over the floor. The comment at `build.gradle.kts:141-142` states the intent
 explicitly: *"Floor, not a target"*.
 
 ## Gate 2 — `verifyPlugin`
@@ -76,7 +76,9 @@ selection when targeting IntelliJ IDEA Community."*), all **Compatible**:
 
 All seven also print: *"Plugin can probably be enabled or disabled without IDE restart"* — the
 dynamic-plugin eligibility that [[Widget Project Leak]] and
-[[Per Project Listener Registration]] exist to keep honest.
+[[Per Project Listener Registration]] exist to keep honest. That line is console output, not written
+to any report file, so ⚠️ on `IU-263.7307.112` specifically this is inferred from the same dynamic
+plugin declaration as the other six, not re-checked against that IDE's console output.
 
 The 5 usages are **one method from five call sites**, not five different risks, on every IDE:
 `com.intellij.util.net.ProxySettings.setProxyConfiguration(ProxyConfiguration)`, invoked from
@@ -95,7 +97,11 @@ reclassified `setProxyConfiguration` from `@ApiStatus.Experimental` to `@ApiStat
 only filters `CompatibilityProblem`), so `build.gradle.kts` enforces a hand-written allowlist instead:
 a `doLast` on `tasks.verifyPlugin` (`build.gradle.kts:168-202`) walks every `internal-api-usages.txt`
 it finds and fails the build unless every line names one of the same five call sites
-(`build.gradle.kts:173-179`). A sixth usage, anywhere, on any IDE, fails.
+(`build.gradle.kts:173-179`). A usage reported from any new or renamed calling method, on any IDE,
+fails. An extra call added *inside* an already-allowed method does not — ⚠️ inferred from `javap`
+against Plugin Verifier 1.411, its usage-location equality is per-method, not per-call-site, so no new
+report line appears; see [[Platform API Constraints]] §3 for the detail and the `lines.size > 5`
+backstop that exists in `build.gradle.kts` for exactly that gap.
 
 `IU-263.7307.112` also reports 6 "Access to unresolved class" problems for `ChangeListManager` /
 `InvokeAfterUpdateMode` — a verifier false positive from the 2026.3 VCS plugin split, ignored via
@@ -133,13 +139,13 @@ no local gate caught because it never compiled locally either.
 
 | Dependency | Version | Note |
 |---|---|---|
-| kotlin | 2.4.10 | also the `kotlinxSerialization` plugin version |
-| junit (Jupiter) | 6.1.3 | `testImplementation`, `build.gradle.kts:37` |
-| junit4 | 4.13.2 | `testRuntimeOnly` **only**, `build.gradle.kts:42` — no test uses it |
-| kotlinxSerialization | 1.11.0 | `implementation` |
+| kotlin | 2.4.21 | also the `kotlinxSerialization` plugin version |
+| junit (Jupiter) | 6.1.3 | `testImplementation`, `build.gradle.kts:38` |
+| junit4 | 4.13.2 | `testRuntimeOnly` **only**, `build.gradle.kts:43` — no test uses it |
+| kotlinxSerialization | 1.12.0 | `implementation` |
 | intelliJPlatform | 2.19.0 | bumped from 2.18.1 — widened `recommended()` IDE selection, see Gate 2 |
-| kover | 0.9.9 | |
-| qodana | 2026.2.0 | matches the pinned action tag |
+| kover | 0.9.11 | |
+| qodana | 2026.2.2 | matches the pinned action tag |
 | changelog | 2.5.0 | |
 
 `gradle.properties`:
@@ -149,7 +155,7 @@ no local gate caught because it never compiled locally either.
 | `platformType` | `IC` |
 | `platformVersion` | `2024.3.6` |
 | `pluginSinceBuild` | `243` |
-| `pluginVersion` | `0.0.6` |
+| `pluginVersion` | `0.0.7` |
 | `gradleVersion` | `9.7.0` |
 | `platformBundledPlugins` | `Git4Idea` |
 | `platformPlugins` / `platformBundledModules` | empty |
