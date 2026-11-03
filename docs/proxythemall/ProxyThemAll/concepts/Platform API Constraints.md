@@ -76,11 +76,13 @@ is unreachable via property syntax. Do not trust the inspection on platform type
 | `postStartupActivityPassed()` | (unannotated, query only) |
 
 There is no non-internal, non-deprecated way to register work. And internal API usage is a **build
-failure**, not a warning: `verifyPlugin` currently reports *0 internal API usages* across three IDEs
-(see [[Build Gates]]) — introducing one breaks the gate.
+failure**, not a warning: `verifyPlugin` now checks seven IDEs and reports *0 internal usages outside
+the 5 grandfathered `setProxyConfiguration` calls* (§3) — any other internal usage, on any IDE, fails
+the hand-written allowlist guard (see [[Build Gates]]). Calling a `StartupManager` member would be
+exactly such a usage.
 
 So the plugin uses the extension point instead: `<postStartupActivity>` in
-`src/main/resources/META-INF/plugin.xml:22` → `services/ProxyThemAllStartupActivity.kt`, a
+`src/main/resources/META-INF/plugin.xml:23` → `services/ProxyThemAllStartupActivity.kt`, a
 `ProjectActivity` with `suspend fun execute(project: Project)`.
 
 Consequence: the activity runs **once per opened project** while the setup is application-wide,

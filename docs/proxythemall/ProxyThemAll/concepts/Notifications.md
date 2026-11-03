@@ -2,8 +2,8 @@
 type: concept
 status: current
 tags: [notifications, ux, settings]
-verified: 2026-08-13
-verified-against: efb35cc
+verified: 2026-11-03
+verified-against: e6c7763
 ---
 
 # Notifications
@@ -12,7 +12,7 @@ One balloon group, one gate, six messages.
 
 Group id: `ProxyThemAll.Notifications`, declared as
 `<notificationGroup id="ProxyThemAll.Notifications" displayType="BALLOON"/>`
-(`src/main/resources/META-INF/plugin.xml:14`) and referenced at
+(`src/main/resources/META-INF/plugin.xml:15`) and referenced at
 `notifications/NotificationService.kt:18`.
 
 ## The gate: INFORMATION is suppressible, WARNING and ERROR are not
