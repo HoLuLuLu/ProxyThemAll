@@ -1,7 +1,7 @@
 ---
 type: log
-verified: 2026-08-13
-verified-against: efb35cc
+verified: 2026-11-03
+verified-against: e6c7763
 ---
 
 # Log
@@ -203,3 +203,36 @@ a fresh clone cannot `git show` them. `233c282`, which most pre-fix citations us
 The unreachable shas are kept in [[Non Compiling Commit]] and [[Session History]] because the history
 they document is real and explains how the defects arose; both pages now say so explicitly rather than
 leaving a reader to discover the sha does not resolve.
+
+## [2026-11-03] ingest | IPGP 2.19.0 exposes setProxyConfiguration as Internal on 2026.3
+
+Bumping the IntelliJ Platform Gradle Plugin from 2.18.1 to 2.19.0 (branch
+`fix/verify-plugin-internal-api`, `e000edb..e6c7763`) widened the verifier's default `recommended()`
+IDE selection from 3 IDEs to 7 — the 2.19.0 changelog calls the old selection a regression. The new
+IDE, `IU-263.7307.112` (2026.3 EAP), exposed two findings:
+
+1. **`ProxySettings.setProxyConfiguration` is `@ApiStatus.Internal` on 2026.3**, not
+   `@ApiStatus.Experimental` as on every IDE back to 243. Upstream commit `61904c9bed` (2026-08-03)
+   made the change. `-ignoredProblemsFile` cannot filter internal-API-usage reports (it only matches
+   `CompatibilityProblem`), so the fix narrows `failureLevel` (`build.gradle.kts:120`) to exclude
+   `INTERNAL_API_USAGES` and adds a hand-written allowlist guard on `tasks.verifyPlugin`
+   (`build.gradle.kts:168-202`) that still fails the build if a sixth usage, or any usage outside the
+   5 grandfathered call sites, appears anywhere.
+2. **2026.3 moved VCS into a bundled plugin** behind the `com.intellij.modules.vcs` alias.
+   `Git4Idea`'s main module no longer pulls in `ChangeListManager` transitively, so
+   `plugin.xml:8` now declares `<depends>com.intellij.modules.vcs</depends>` directly. Plugin
+   Verifier 1.411 still reports 6 unresolved-class problems against 263 regardless (a known verifier
+   false positive, platform.jetbrains.com topic 5250), ignored via `verifier-ignored-problems.txt`
+   (`build.gradle.kts:123`).
+
+Both findings are documented in [[Platform API Constraints]] (§3 rewritten, §11 new), [[Build Gates]]
+Gate 2 (7-IDE table), [[ProxyService]], and two new open risks in [[Defect Register]]: the
+grandfathering end-date (⚠️ inferred from a JetBrains forum post, no fix possible yet) and the
+2026.3 classloader-resolution path (⚠️ inferred from source, not executed — mitigated by a new manual
+step, `docs/VERIFICATION.md` §6.6). `CLAUDE.md` updated to match: the stale "Experimental" convention
+note, the verifier IDE count, the manual-plan step count (48 → 49), and a new note on
+`verifier-ignored-problems.txt` as a verifier-false-positive workaround only.
+
+Pages touched: `concepts/Platform API Constraints.md`, `operations/Build Gates.md`,
+`operations/Manual Verification.md`, `components/ProxyService.md`, `defects/Defect Register.md`,
+`index.md`, root `CLAUDE.md`, `docs/VERIFICATION.md`. All re-stamped `verified-against: e6c7763`.

@@ -1,7 +1,7 @@
 ---
 type: index
-verified: 2026-08-13
-verified-against: efb35cc
+verified: 2026-11-03
+verified-against: e6c7763
 ---
 
 # Index
@@ -71,7 +71,7 @@ Full table with severity and guard status: **[[Defect Register]]** — **12 defe
 |---|---|
 | [[Build Gates]] | `check` and `verifyPlugin`, what each covers, CI parity, dependency versions |
 | [[Test Suite]] | 68 tests in 10 files, per-class counts, and the honest coverage gaps |
-| [[Manual Verification]] | The 48-step manual plan and which defects only it guards |
+| [[Manual Verification]] | The 49-step manual plan and which defects only it guards |
 | [[Session History]] | How the code reached its current state (historical: pre-squash commits) |
 
 ## Conventions

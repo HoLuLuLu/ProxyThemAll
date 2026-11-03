@@ -2,8 +2,8 @@
 type: component
 status: current
 tags: [state-machine, platform-api, threading]
-verified: 2026-08-12
-verified-against: efb35cc
+verified: 2026-11-03
+verified-against: e6c7763
 ---
 
 # ProxyService
@@ -69,9 +69,9 @@ raw `ProxyConfiguration` so the poller can spot edits that leave the enum unchan
   the platform's own instances, which breaks both the `!is DirectProxy` checks and the
   configuration-equality comparison in [[Change Detection]]. The comment at
   `ProxyService.kt:163-164` records this. See [[Platform API Constraints]].
-- `ProxySettings.setProxyConfiguration` is platform-experimental; the whole class carries
-  `@Suppress("UnstableApiUsage")` (`ProxyService.kt:20`) because it is the only way to change the IDE
-  proxy (`ProxyService.kt:14-15`).
+- `ProxySettings.setProxyConfiguration` is platform-internal since 2026.3, grandfathered; see
+  [[Platform API Constraints]]. The whole class carries `@Suppress("UnstableApiUsage")`
+  (`ProxyService.kt:20`) because it is the only way to change the IDE proxy (`ProxyService.kt:14-15`).
 
 ## Testability
 

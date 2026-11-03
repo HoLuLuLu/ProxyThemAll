@@ -433,6 +433,26 @@ the file is in the Default Changelist.
 
 **Expect** `my.note=2` still present. (Regression check for the ordinary case.)
 
+### 6.6 Changelist filing resolves on 2026.3 (IU-263 only) ⚠️ key fix
+
+2026.3 moved VCS into a bundled plugin behind the `com.intellij.modules.vcs` alias; `plugin.xml` now
+declares that dependency so `ChangeListManager` keeps resolving. This has not been exercised in a real
+2026.3 IDE — this step is that exercise.
+
+**Do** Launch against the 2026.3 build the Plugin Verifier checks, not the default sandbox:
+
+```bash
+./gradlew runIde -PplatformType=IU -PplatformVersion=263.7307.112
+```
+
+Repeat 6.1 (enable the proxy, confirm the ProxyThemAll changelist appears) and 6.3 (disable, confirm
+it disappears) in that sandbox.
+
+**Expect** Same result as 6.1/6.3 — changelist filed, then removed when empty. `idea.log` contains
+**no** `NoClassDefFoundError` mentioning `ChangeListManager` or `InvokeAfterUpdateMode`.
+❌ Without the `com.intellij.modules.vcs` dependency, `GradleProxyConfigurer.moveToProxyChangelist`
+would have no classloader path to `ChangeListManager` on 2026.3.
+
 ---
 
 ## 7. Backup & restore (secure storage)

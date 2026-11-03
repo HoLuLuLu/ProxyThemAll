@@ -2,8 +2,8 @@
 type: index
 status: current
 tags: [defects, register, audit]
-verified: 2026-08-13
-verified-against: efb35cc
+verified: 2026-11-03
+verified-against: e6c7763
 ---
 
 # Defect Register
@@ -87,6 +87,39 @@ IDE lost the setting — the plugin can only tell them apart while the process l
 Accepted: making it durable means persisting a tri-state and deciding what to do when the IDE's own
 configuration and the plugin's memory disagree. See [[Change Detection Enum Only]] for the related
 coarseness of `ProxyState`.
+
+### ⚠️ `setProxyConfiguration` grandfathering is expected to end — OPEN, no fix available yet
+
+`ProxySettings.setProxyConfiguration` was reclassified `@ApiStatus.Internal` upstream in 2026.3
+(intellij-community commit `61904c9bed`). Marketplace currently tolerates the plugin's 5 existing
+call sites (see [[Platform API Constraints]] §3), but ⚠️ inferred from JetBrains staff forum
+statement, platform.jetbrains.com topic 4628 — *"will continue publishing automatically till 2026.3
+at least ... We will enforce it only once we have full one Major release covered"* — the
+grandfathering is expected to end roughly one major release after 2026.3.
+
+After that point, new plugin uploads may be rejected outright unless JetBrains ships a public,
+non-internal setter — there is currently no such alternative (`HttpConfigurable` is
+`@Deprecated(forRemoval = true)`; `ProxySettingsOverrideProvider` solves a different problem; see §3
+for both). No code fix is possible today. Mitigation: a forum/YouTrack request asking JetBrains for a
+public API, tracked as Task 3 of this work.
+
+### ⚠️ 2026.3 VCS content-module resolution is untested in a real sandbox — OPEN, no automated guard
+
+2026.3 moved VCS into a bundled plugin behind the `com.intellij.modules.vcs` alias (see
+[[Platform API Constraints]] §11); `plugin.xml:8` now declares that dependency so
+`GradleProxyConfigurer.moveToProxyChangelist` / `cleanupProxyThemAllChangelist` can keep resolving
+`ChangeListManager` and `InvokeAfterUpdateMode` on 2026.3.
+
+⚠️ That the dependency actually makes the classes resolve is inferred from reading
+`MultiParentClassLoaderHelper`'s classloader-resolution behaviour, **not executed** — no automated
+test exercises a 2026.3 IDE, and Plugin Verifier 1.411 cannot confirm it either (it still reports the
+classes as unresolved; that report is itself suppressed as a known false positive, see §11). If the
+dependency declaration is wrong in some way the reasoning missed, the failure mode is a
+`NoClassDefFoundError` at runtime the first time a user with a 2026.3 IDE enables Gradle proxy support
+— silent until then, since nothing local would catch it.
+
+Mitigation: manual `runIde` against `IU-263.7307.112`, exercising the changelist move/cleanup path and
+checking `idea.log` for the error — `docs/VERIFICATION.md` §6.6.
 
 ### ⚠️ git may ignore `http.noproxy` entirely — UNCONFIRMED, needs a second git build
 
