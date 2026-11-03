@@ -118,6 +118,9 @@ intellijPlatform {
 
         // INTERNAL_API_USAGES is enforced by the allowlist guard on tasks.verifyPlugin instead
         failureLevel = listOf(FailureLevel.COMPATIBILITY_PROBLEMS, FailureLevel.OVERRIDE_ONLY_API_USAGES)
+
+        // verifier 1.411 false positive for 2026.3 VCS content modules, see platform.jetbrains.com topic 5250, remove when verifier fixes it
+        ignoredProblemsFile = layout.projectDirectory.file("verifier-ignored-problems.txt")
     }
 }
 
