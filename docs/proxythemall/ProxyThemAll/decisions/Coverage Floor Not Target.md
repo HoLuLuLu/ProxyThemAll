@@ -13,7 +13,7 @@ not a goal.**
 
 ## Context
 
-`build.gradle.kts:127-146`:
+`build.gradle.kts:133-153`:
 
 ```kotlin
 kover {
@@ -36,7 +36,7 @@ kover {
 }
 ```
 
-The intent is written in the build file itself (`:134-135`). `xml.onCheck = true` regenerates the report
+The intent is written in the build file itself (`:141-142`). `xml.onCheck = true` regenerates the report
 on every `check`, and `koverVerify` is wired into `check`
 (`:test → :koverGenerateArtifact → :koverXmlReport → :koverCachedVerify → :koverVerify → :check`) —
 see [[Build Gates]].

@@ -2,15 +2,16 @@
 type: operation
 status: current
 tags: [build, gradle, ci, verifier, coverage]
-verified: 2026-08-13
-verified-against: efb35cc
+verified: 2026-11-04
+verified-against: c466795
 ---
 
 # Build Gates
 
 What stops a bad change, and where. Everything below was **✅ executed** (`./gradlew check`,
-`./gradlew verifyPlugin`, both `BUILD SUCCESSFUL`) — `check` most recently on the current working tree
-on `efb35cc`, the squash-merge commit now on `main`.
+`./gradlew verifyPlugin`, both `BUILD SUCCESSFUL`) — most recently on `c466795`
+(branch `fix/verify-plugin-internal-api`); the prior run this page documented was on `efb35cc`, the
+squash-merge commit on `main`.
 
 ## Local run configurations
 
@@ -44,7 +45,7 @@ new ones arrived with [[SOCKS Bypass Hosts Ignored]].)
 
 ### Kover
 
-`build.gradle.kts:127-146`:
+`build.gradle.kts:133-153`:
 
 | Setting | Value |
 |---|---|
@@ -53,24 +54,33 @@ new ones arrived with [[SOCKS Bypass Hosts Ignored]].)
 | `coverageUnits` | `CoverageUnit.LINE` |
 
 ✅ Actual total from `build/reports/kover/report.xml`: LINE `covered=298 missed=825` → **26.54 %**.
-6.5 points of headroom over the floor. The comment at `build.gradle.kts:134-135` states the intent
+6.5 points of headroom over the floor. The comment at `build.gradle.kts:141-142` states the intent
 explicitly: *"Floor, not a target"*.
 
 ## Gate 2 — `verifyPlugin`
 
-✅ Plugin Verifier 1.409, three IDEs, all **Compatible**:
+✅ Plugin Verifier 1.411, **seven** IDEs (up from three — IntelliJ Platform Gradle Plugin 2.19.0's
+`recommended()` selection grew; its changelog calls the old, narrower selection a regression:
+*"Regression. Include unified IntelliJ IDEA 2025.3+ releases in the default Plugin Verifier IDE
+selection when targeting IntelliJ IDEA Community."*), all **Compatible**:
 
 | IDE build | Verdict | Experimental API | Internal API |
 |---|---|---|---|
 | IC-243.28141.41 | Compatible | 5 usages | 0 |
 | IC-251.29188.72 | Compatible | 5 usages | 0 |
-| IC-252.28539.97 | Compatible | 5 usages | 0 |
+| IC-252.28539.149 | Compatible | 5 usages | 0 |
+| IU-253.33813.99 | Compatible | 5 usages | 0 |
+| IU-261.27258.136 | Compatible | 5 usages | 0 |
+| IU-262.11879.100 | Compatible | 5 usages | 0 |
+| IU-263.7307.112 | Compatible | 0 usages | **5 usages** |
 
-All three also print: *"Plugin can probably be enabled or disabled without IDE restart"* — the
+All seven also print: *"Plugin can probably be enabled or disabled without IDE restart"* — the
 dynamic-plugin eligibility that [[Widget Project Leak]] and
-[[Per Project Listener Registration]] exist to keep honest.
+[[Per Project Listener Registration]] exist to keep honest. That line is console output, not written
+to any report file, so ⚠️ on `IU-263.7307.112` specifically this is inferred from the same dynamic
+plugin declaration as the other six, not re-checked against that IDE's console output.
 
-The 5 experimental usages are **one method from five call sites**, not five different risks:
+The 5 usages are **one method from five call sites**, not five different risks, on every IDE:
 `com.intellij.util.net.ProxySettings.setProxyConfiguration(ProxyConfiguration)`, invoked from
 
 - `ProxyService.disableProxy(ProxySettings)`
@@ -79,11 +89,28 @@ The 5 experimental usages are **one method from five call sites**, not five diff
 - `ProxyRestoreService.restoreProxyToIntelliJ(ProxyInfo)`
 - `ProxyController.performGlobalCleanup()`
 
-Zero internal API usages — the verifier prints no internal-API section at all. Single point of
-API risk; see [[ProxyService]].
+What changed is the *category*, on one IDE only: on 243 through 262 the verifier lists these 5 in
+`experimental-api-usages.txt` and does not fail the build over them (reported, not gating). On
+`IU-263.7307.112` (2026.3 EAP) the same 5 lines appear in `internal-api-usages.txt` instead — upstream
+reclassified `setProxyConfiguration` from `@ApiStatus.Experimental` to `@ApiStatus.Internal`, see
+[[Platform API Constraints]] §3. Internal API usage is *not* covered by `-ignoredProblemsFile` (it
+only filters `CompatibilityProblem`), so `build.gradle.kts` enforces a hand-written allowlist instead:
+a `doLast` on `tasks.verifyPlugin` (`build.gradle.kts:168-202`) walks every `internal-api-usages.txt`
+it finds and fails the build unless every line names one of the same five call sites
+(`build.gradle.kts:173-179`). A usage reported from any new or renamed calling method, on any IDE,
+fails. An extra call added *inside* an already-allowed method does not — ⚠️ inferred from `javap`
+against Plugin Verifier 1.411, its usage-location equality is per-method, not per-call-site, so no new
+report line appears; see [[Platform API Constraints]] §3 for the detail and the `lines.size > 5`
+backstop that exists in `build.gradle.kts` for exactly that gap.
 
-Reports land in `build/reports/pluginVerifier/IC-*/` (`verification-verdict.txt`,
-`experimental-api-usages.txt`, `report.html`).
+`IU-263.7307.112` also reports 6 "Access to unresolved class" problems for `ChangeListManager` /
+`InvokeAfterUpdateMode` — a verifier false positive from the 2026.3 VCS plugin split, ignored via
+`verifier-ignored-problems.txt` (`build.gradle.kts:123`). See
+[[Platform API Constraints]] §11 and the matching open risk in [[Defect Register]].
+
+Reports land in `build/reports/pluginVerifier/<IDE-build>/plugins/org.holululu.proxythemall/<version>/`
+(`verification-verdict.txt`, `experimental-api-usages.txt` or `internal-api-usages.txt`,
+`ignored-problems.txt` on 263 only, `report.html`).
 
 ## Gate 3 — CI
 
@@ -95,7 +122,7 @@ own before anything else.
 |---|---|---|---|
 | `build` | — | `./gradlew buildPlugin` + artifact upload | none (implied by others) |
 | `test` | build | `./gradlew check`, then `codecov/codecov-action@v7` on `build/reports/kover/report.xml` | Run Tests |
-| `inspectCode` | build | `JetBrains/qodana-action@v2026.2.0` — **no `gradlew` at all** | none |
+| `inspectCode` | build | `JetBrains/qodana-action@v2026.2.2` — **no `gradlew` at all** | none |
 | `verify` | build | `./gradlew verifyPlugin` + report upload | Run Verifications |
 | `releaseDraft` | build, test, inspectCode, verify | `./gradlew properties --property version`, `./gradlew getChangelog --unreleased`, `gh release create --draft` | none |
 
@@ -112,13 +139,13 @@ no local gate caught because it never compiled locally either.
 
 | Dependency | Version | Note |
 |---|---|---|
-| kotlin | 2.4.10 | also the `kotlinxSerialization` plugin version |
-| junit (Jupiter) | 6.1.3 | `testImplementation`, `build.gradle.kts:37` |
-| junit4 | 4.13.2 | `testRuntimeOnly` **only**, `build.gradle.kts:42` — no test uses it |
-| kotlinxSerialization | 1.11.0 | `implementation` |
-| intelliJPlatform | 2.18.1 | |
-| kover | 0.9.9 | |
-| qodana | 2026.2.0 | matches the pinned action tag |
+| kotlin | 2.4.21 | also the `kotlinxSerialization` plugin version |
+| junit (Jupiter) | 6.1.3 | `testImplementation`, `build.gradle.kts:38` |
+| junit4 | 4.13.2 | `testRuntimeOnly` **only**, `build.gradle.kts:43` — no test uses it |
+| kotlinxSerialization | 1.12.0 | `implementation` |
+| intelliJPlatform | 2.19.0 | bumped from 2.18.1 — widened `recommended()` IDE selection, see Gate 2 |
+| kover | 0.9.11 | |
+| qodana | 2026.2.2 | matches the pinned action tag |
 | changelog | 2.5.0 | |
 
 `gradle.properties`:
@@ -128,7 +155,7 @@ no local gate caught because it never compiled locally either.
 | `platformType` | `IC` |
 | `platformVersion` | `2024.3.6` |
 | `pluginSinceBuild` | `243` |
-| `pluginVersion` | `0.0.6` |
+| `pluginVersion` | `0.0.7` |
 | `gradleVersion` | `9.7.0` |
 | `platformBundledPlugins` | `Git4Idea` |
 | `platformPlugins` / `platformBundledModules` | empty |
@@ -136,9 +163,15 @@ no local gate caught because it never compiled locally either.
 Plus `jvmToolchain(21)` (`build.gradle.kts:19-21`), `kotlin.stdlib.default.dependency=false`,
 configuration cache and build cache both on.
 
-The compile-time platform is 2024.3.6 while the verifier checks 243/251/252 — the plugin compiles
-against the oldest supported build and is *verified* against the newest. That asymmetry is why
-"compiles" is never sufficient evidence here; see the bytecode rule in `CLAUDE.md`.
+`platformBundledPlugins` only covers plugin-level dependencies. `src/main/resources/META-INF/plugin.xml`
+also hand-declares two module-alias `<depends>` tags that have no `gradle.properties` equivalent:
+`com.intellij.modules.platform` (`:7`, pre-existing) and, since 2026.3's VCS split,
+`com.intellij.modules.vcs` (`:8`) — see [[Platform API Constraints]] §11.
+
+The compile-time platform is 2024.3.6 while the verifier checks all seven of 243 through 263 — the
+plugin compiles against the oldest supported build and is *verified* against both the oldest and the
+newest. That asymmetry is why "compiles" is never sufficient evidence here; see the bytecode rule in
+`CLAUDE.md`.
 
 ## Related
 

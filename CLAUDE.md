@@ -22,14 +22,14 @@ If you change plugin behaviour, update the affected wiki pages and append to
 `docs/proxythemall/ProxyThemAll/log.md`. The vault schema explains the conventions
 (`file:line` citations, ✅ verified vs ⚠️ inferred, `verified-against` frontmatter).
 
-`docs/VERIFICATION.md` is the manual test plan — 48 steps. Several defects have **no** automated
+`docs/VERIFICATION.md` is the manual test plan — 49 steps. Several defects have **no** automated
 guard and only that plan catches them.
 
 ## Commands
 
 ```bash
 ./gradlew check                       # "Run Tests" run config: test + koverXmlReport + koverVerify
-./gradlew verifyPlugin                # "Run Verifications": IntelliJ Plugin Verifier, 3 IDE versions
+./gradlew verifyPlugin                # "Run Verifications": IntelliJ Plugin Verifier, 7 IDE versions
 ./gradlew runIde                      # "Run Plugin": launches a sandbox IDE
 ./gradlew test --tests '*ProxyUrlBuilderTest*'   # a single test class
 ./gradlew buildPlugin                 # distributable zip
@@ -109,14 +109,19 @@ Two rules in that layer are load-bearing:
   locked keychain). `LOG.error` raises "IDE fatal error" reports and is a marketplace-review
   rejection.
 - **Never log the proxy URL** — it embeds credentials. Log `host:port`.
-- `ProxySettings.setProxyConfiguration` is `@ApiStatus.Experimental` and unavoidable (5 call sites,
-  suppressed). Do not introduce `@ApiStatus.Internal` APIs — `verifyPlugin` fails the build on them,
+- `setProxyConfiguration` is `@ApiStatus.Internal` from 2026.3 and grandfathered by Marketplace only
+  while its 5 call sites stay unchanged, so do not add, move or merge them. `INTERNAL_API_USAGES` is
+  enforced by the allowlist guard in `build.gradle.kts`, not by `failureLevel`. Do not introduce
+  `@ApiStatus.Internal` APIs — `verifyPlugin` fails the build on any usage outside that allowlist,
   which is why `StartupManager` is not used.
 - Use the platform factories `ProxyConfiguration.proxy(...)` / `.direct`, never anonymous
   implementations — those lack `equals`/`hashCode` and break the change detection above.
 - Gradle credentials are written in **plain text** to `gradle.properties` by design (Gradle offers no
   encrypted alternative). This is an accepted, documented risk — see
   `decisions/Plaintext Gradle Credentials.md`. Do not "fix" it without reading that page.
+- `verifier-ignored-problems.txt` entries are a verifier false-positive workaround (2026.3 VCS content
+  modules, see `concepts/Platform API Constraints.md` §11) — remove them once the verifier resolves
+  that, and do not add further entries without the same kind of evidence.
 
 ## Watch out for
 

@@ -2,16 +2,16 @@
 type: concept
 status: current
 tags: [lifecycle, disposer, threading, edt, memory-leak, platform-api]
-verified: 2026-08-12
-verified-against: efb35cc
+verified: 2026-11-03
+verified-against: 1885550
 ---
 
 # Lifecycle and Leaks
 
 What owns what, when it dies, and which thread it may run on. The plugin declares itself
 dynamically loadable — the verifier prints *"Plugin can probably be enabled or disabled without IDE
-restart"* on all three checked IDEs ([[Build Gates]]) — which makes every registration a potential
-leak.
+restart"* on all seven checked IDEs; ⚠️ on `IU-263.7307.112` specifically this is console output that
+was not individually re-checked ([[Build Gates]]) — which makes every registration a potential leak.
 
 ## Ownership: the manager is tied to the Application
 
@@ -63,7 +63,7 @@ registers or removes during notification cannot cause a `ConcurrentModificationE
 
 The platform gives no usable `StartupManager` (all members are `@ApiStatus.Internal` or `@Deprecated` —
 ✅ verified in [[Platform API Constraints]] §2), so the plugin registers a `<postStartupActivity>`
-(`plugin.xml:22`) implemented as a `ProjectActivity`
+(`plugin.xml:23`) implemented as a `ProjectActivity`
 (`services/ProxyThemAllStartupActivity.kt:13`, `suspend fun execute(project)` at `:19`).
 
 `ProjectActivity` runs **once per opened project**. The setup is **application-wide**. The bridge:

@@ -2,14 +2,14 @@
 type: operation
 status: current
 tags: [testing, manual, security, sandbox]
-verified: 2026-08-13
-verified-against: efb35cc
+verified: 2026-11-03
+verified-against: e6c7763
 ---
 
 # Manual Verification
 
 The human-facing test contract: **`docs/VERIFICATION.md`** — path relative to the repo root, i.e.
-*outside this vault* (the vault itself lives at `docs/proxythemall/ProxyThemAll/`). 611 lines.
+*outside this vault* (the vault itself lives at `docs/proxythemall/ProxyThemAll/`). 631 lines.
 
 Per `CLAUDE.md`: when this wiki and `docs/VERIFICATION.md` disagree about expected behaviour, the
 manual plan wins — it is what a human signs off against.
@@ -17,21 +17,22 @@ manual plan wins — it is what a human signs off against.
 ## Shape
 
 ✅ Counted from the file (`grep -c '^### '`): **11 numbered sections** (§0 setup + §1–§10) plus an
-unnumbered *Result sheet*, and **53 `###` steps** total — 5 of them setup (§0.1–§0.5), so **48
+unnumbered *Result sheet*, and **54 `###` steps** total — 5 of them setup (§0.1–§0.5), so **49
 executable test steps**. Steps use `x.y` numbering, not a flat 1..n list, and two carry a letter
 suffix (§5.8b, §7.2b) because they were inserted beside an existing step rather than appended.
 
-Was 46. Two steps were added with the 2026-08-13 fixes:
+Was 46, then 48 with the 2026-08-13 fixes, then 49 with the 2026-11-03 2026.3 VCS-split fix:
 
 | Step | Guards |
 |---|---|
 | **§2.5** No balloon on IDE startup | [[Startup Balloon]] — three restart cases: configured+enabled, configured+disabled, never configured |
 | **§5.8b** SOCKS bypass hosts use the SOCKS key | [[SOCKS Bypass Hosts Ignored]] — the key is written *and* removed again on disable |
+| **§6.6** Changelist filing resolves on 2026.3 (IU-263 only) | the open risk in [[Defect Register]] — the `com.intellij.modules.vcs` dependency's classloader effect is ⚠️ inferred, not executed, anywhere else |
 
 Every step is `**Do**` (your actions) / `**Expect**` (what must happen), with `❌` marking the
-specific bug the step guards. Two more markers are used: `⚠️ key fix` (**13** steps: §2.5, §3.4, §4.4,
-§5.2, §5.3, §5.4, §5.8b, §6.1, §6.3, §7.2, §7.5, §8.1, §9.2) and `🔒` (security/robustness, 6 steps:
-§4.3, §6.4, §7.2b, §8.3, §9.3, §10.3). No step carries both.
+specific bug the step guards. Two more markers are used: `⚠️ key fix` (**14** steps: §2.5, §3.4, §4.4,
+§5.2, §5.3, §5.4, §5.8b, §6.1, §6.3, §6.6, §7.2, §7.5, §8.1, §9.2) and `🔒` (security/robustness, 6
+steps: §4.3, §6.4, §7.2b, §8.3, §9.3, §10.3). No step carries both.
 
 ## Fixtures
 
@@ -96,14 +97,14 @@ Judging a polled result too early is the single most likely way to record a fals
 | 3 | 4 | status bar widget — 3 icons, tooltip, click, hide/show without restart | [[Widget Project Leak]] |
 | 4 | 6 | git — credentials, RFC 3986, log hygiene, **global config**, cleanup, non-git | [[GitProxyConfigurer]] |
 | 5 | 10 | gradle — properties, duplication, content survival, jvmargs, specials, non-gradle, global fallback, SOCKS, **SOCKS bypass keys**, CRLF | [[GradlePropertiesText]], [[SOCKS Bypass Hosts Ignored]] |
-| 6 | 5 | ProxyThemAll changelist — filing, active list, auto-removal, foreign changes in/outside the block | [[Foreign Lines Destroyed]] |
+| 6 | 6 | ProxyThemAll changelist — filing, active list, auto-removal, foreign changes in/outside the block, **2026.3 VCS resolution** | [[Foreign Lines Destroyed]] |
 | 7 | 7 | backup & restore via secure storage — backup, refresh, idle no-op, manual + startup restore, password persistence, clear | [[Restored Password Not Persisted]] |
 | 8 | 3 | multi-project — both updated at once, no duplicated work, no listener growth | [[Per Project Listener Registration]] |
 | 9 | 3 | notifications — setting respected, errors always shown, no IDE fatal-error reports | [[Notifications]] |
 | 10 | 3 | robustness sweep — no UI freezes, clean shutdown, whole-log final scan | [[Lifecycle and Leaks]] |
 
 §5 (10 steps) and §7 (7 steps) are the heaviest — the two subsystems that write to disk. ✅ Per-section
-counts sum to 53, matching the total.
+counts sum to 54, matching the total.
 
 ## Steps that are the ONLY guard for a defect
 

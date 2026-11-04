@@ -5,6 +5,7 @@
     <vendor>holululu</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
     <!-- Git4Idea is bundled in all IntelliJ-based IDEs and provides the configured git executable.
          The Gradle plugin is deliberately not required: Gradle support only reads and writes
          gradle.properties, so it needs no Gradle plugin API. -->

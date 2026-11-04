@@ -1,7 +1,7 @@
 ---
 type: log
-verified: 2026-08-13
-verified-against: efb35cc
+verified: 2026-11-03
+verified-against: 1885550
 ---
 
 # Log
@@ -203,3 +203,113 @@ a fresh clone cannot `git show` them. `233c282`, which most pre-fix citations us
 The unreachable shas are kept in [[Non Compiling Commit]] and [[Session History]] because the history
 they document is real and explains how the defects arose; both pages now say so explicitly rather than
 leaving a reader to discover the sha does not resolve.
+
+## [2026-11-03] ingest | IPGP 2.19.0 exposes setProxyConfiguration as Internal on 2026.3
+
+Bumping the IntelliJ Platform Gradle Plugin from 2.18.1 to 2.19.0 (branch
+`fix/verify-plugin-internal-api`, `e000edb..e6c7763`) widened the verifier's default `recommended()`
+IDE selection from 3 IDEs to 7 — the 2.19.0 changelog calls the old selection a regression. The new
+IDE, `IU-263.7307.112` (2026.3 EAP), exposed two findings:
+
+1. **`ProxySettings.setProxyConfiguration` is `@ApiStatus.Internal` on 2026.3**, not
+   `@ApiStatus.Experimental` as on every IDE back to 243. Upstream commit `61904c9bed` (2026-08-03)
+   made the change. `-ignoredProblemsFile` cannot filter internal-API-usage reports (it only matches
+   `CompatibilityProblem`), so the fix narrows `failureLevel` (`build.gradle.kts:120`) to exclude
+   `INTERNAL_API_USAGES` and adds a hand-written allowlist guard on `tasks.verifyPlugin`
+   (`build.gradle.kts:168-202`) that still fails the build if a sixth usage, or any usage outside the
+   5 grandfathered call sites, appears anywhere.
+2. **2026.3 moved VCS into a bundled plugin** behind the `com.intellij.modules.vcs` alias.
+   `Git4Idea`'s main module no longer pulls in `ChangeListManager` transitively, so
+   `plugin.xml:8` now declares `<depends>com.intellij.modules.vcs</depends>` directly. Plugin
+   Verifier 1.411 still reports 6 unresolved-class problems against 263 regardless (a known verifier
+   false positive, platform.jetbrains.com topic 5250), ignored via `verifier-ignored-problems.txt`
+   (`build.gradle.kts:123`).
+
+Both findings are documented in [[Platform API Constraints]] (§3 rewritten, §11 new), [[Build Gates]]
+Gate 2 (7-IDE table), [[ProxyService]], and two new open risks in [[Defect Register]]: the
+grandfathering end-date (⚠️ inferred from a JetBrains forum post, no fix possible yet) and the
+2026.3 classloader-resolution path (⚠️ inferred from source, not executed — mitigated by a new manual
+step, `docs/VERIFICATION.md` §6.6). `CLAUDE.md` updated to match: the stale "Experimental" convention
+note, the verifier IDE count, the manual-plan step count (48 → 49), and a new note on
+`verifier-ignored-problems.txt` as a verifier-false-positive workaround only.
+
+Pages touched: `concepts/Platform API Constraints.md`, `operations/Build Gates.md`,
+`operations/Manual Verification.md`, `components/ProxyService.md`, `defects/Defect Register.md`,
+`index.md`, root `CLAUDE.md`, `docs/VERIFICATION.md`. All re-stamped `verified-against: e6c7763`.
+
+## [2026-11-03] lint | Whole-branch review findings: wrong failureLevel default, overclaimed guard guarantee, untestable manual step
+
+A final whole-branch review of `fix/verify-plugin-internal-api` (HEAD at the time `1885550`) found
+several claims in the pages this entry's predecessor touched that were wrong or untestable, plus
+drift unrelated to the 2.19.0 bump that a citation grep caught along the way.
+
+1. **§2 said the Plugin Gradle Plugin's own default `failureLevel` is `ALL`. It is not.** ✅ Read
+   straight from upstream source,
+   `IntelliJPlatformExtension.kt`'s `failureLevel.convention(listOf(FailureLevel.COMPATIBILITY_PROBLEMS,
+   FailureLevel.INTERNAL_API_USAGES, FailureLevel.OVERRIDE_ONLY_API_USAGES))` — no `ALL` value appears
+   anywhere in that convention. [[Platform API Constraints]] §3 corrected; the false `ALL` claim is
+   kept nowhere else, there was nothing to mark superseded. Also removed: every `Task 1`/`Task 2`/
+   `Task 3` reference to this work's own plan ([[Platform API Constraints]] §3, [[Defect Register]]'s
+   `setProxyConfiguration` grandfathering risk) — the wiki describes the code, not a plan's task
+   numbers.
+2. **The log entry above (this file, line 219) overclaims the allowlist guard: "a sixth usage,
+   or any usage outside the 5 grandfathered call sites, appears anywhere" fails the build.** That is
+   wrong, and is corrected here rather than by editing that entry. ⚠️ By reviewer `javap` against
+   Plugin Verifier 1.411, `InternalMethodUsage` equality covers only the API element and the *usage
+   location* — a calling method, with no line number (the collection it is deduplicated through is
+   inferred to be `Set`-like from the output shape, not executed). A second call to
+   `setProxyConfiguration` added inside one of the five already-allowed methods produces no new report
+   line, so it is invisible to the guard — and, since Marketplace review runs the same verifier, also
+   invisible to Marketplace. The real guarantee: a usage reported from any **new or renamed calling
+   method** fails. Controller ruling: `build.gradle.kts`'s `lines.size > 5` check
+   (`build.gradle.kts:186-188`) stays as a backstop against the inferred dedup-by-method behaviour
+   turning out wrong, or a future verifier release reporting per-call-site instead of per-method — it
+   was not touched. [[Platform API Constraints]] §3 and [[Build Gates]] Gate 2 reworded to the narrower
+   claim.
+3. **`docs/VERIFICATION.md` §6.6 used `./gradlew runIde -PplatformVersion=263.7307.112`, which
+   recompiles against 263 and never tests the artifact Marketplace would receive.** Controller ruling:
+   rewritten to `./gradlew buildPlugin`, then install the resulting
+   `build/distributions/ProxyThemAll-<version>.zip` from disk into a real IntelliJ IDEA 2026.3 EAP via
+   Settings → Plugins → ⚙ → Install Plugin from Disk…, restart, then exercise 6.1/6.3's changelist
+   move and cleanup. Expected result narrowed to the concrete class,
+   `com.intellij.openapi.vcs.changes.ChangeListManager`, and the log path corrected to the installed
+   IDE's own log (macOS: `~/Library/Logs/JetBrains/IntelliJIdea2026.3/idea.log`), not the sandbox's.
+   [[Defect Register]]'s matching mitigation description updated to match.
+4. **§3's quoted verifier line abbreviated `com.intellij.util.net.ProxyConfiguration arg0` to
+   `ProxyConfiguration arg0`.** Made verbatim against
+   `build/reports/pluginVerifier/IU-263.7307.112/.../internal-api-usages.txt`.
+5. **`build.gradle.kts` citations drifted, not all from this branch's own edits.** Re-grepped every
+   `build.gradle.kts:<line>` citation in the vault against the file on disk at `1885550`.
+   `verifyPlugin`/allowlist/message citations (`:168-202`, `:173-179`, `:197`, `:120`, `:123`) were
+   already correct — no change. Genuinely stale, predating this branch: the `kover {}` block citation
+   (`:127-146` → `:133-153`), its "Floor, not a target" comment (`:134-135` → `:141-142`, both in
+   [[Build Gates]] and [[Coverage Floor Not Target]]), and the junit/junit4 dependency lines in
+   [[Build Gates]] and [[Test Suite]] (`:37` → `:38`, `:42`/`:39-41` → `:43`/`:40-42`). Not restamped:
+   [[Test Suite]] and [[Coverage Floor Not Target]] keep `verified-against: efb35cc` — only their
+   citations were checked, not their `efb35cc`-era coverage/test-count claims.
+6. **[[Build Gates]] claimed all seven IDEs print "Plugin can probably be enabled or disabled without
+   IDE restart."** That line is Plugin Verifier console output, written to no report file, so it
+   cannot be re-checked after the fact for `IU-263.7307.112` specifically. Marked ⚠️ for that one IDE
+   in [[Build Gates]] and [[Lifecycle and Leaks]] rather than asserted as checked.
+7. **[[Build Gates]]'s Versions table was stale against `gradle.properties` and
+   `gradle/libs.versions.toml`** at `1885550`: `pluginVersion` `0.0.6` → `0.0.7`, `kotlin` `2.4.10` →
+   `2.4.21`, `kotlinxSerialization` `1.11.0` → `1.12.0`, `kover` `0.9.9` → `0.9.11`, `qodana` `2026.2.0`
+   → `2026.2.2`. `intelliJPlatform`, `changelog`, `junit`, `junit4` were already current.
+
+**Found, not fixed — out of this pass's scope.** [[Build Gates]] Gate 3's CI table still cites
+`JetBrains/qodana-action@v2026.2.0`; the workflow pins `v2026.2.2`. That table wasn't named by this
+review and isn't a `build.gradle.kts` citation, so it was left for a future pass rather than fixed
+on spec.
+
+Pages touched: `concepts/Platform API Constraints.md`, `operations/Build Gates.md`,
+`defects/Defect Register.md`, `concepts/Lifecycle and Leaks.md`, `operations/Test Suite.md`,
+`decisions/Coverage Floor Not Target.md`, `docs/VERIFICATION.md`. Re-stamped
+`verified-against: 1885550`: `Platform API Constraints.md`, `Build Gates.md`, `Defect Register.md`,
+`Lifecycle and Leaks.md`.
+
+## [2026-11-04] lint | Leftovers from the whole-branch review
+
+`ProxyService.kt:14` comment updated from "marked experimental" to "`@ApiStatus.Internal` since
+2026.3" (user-approved; line numbers unchanged, so `ProxyService.kt:14-15` citations still hold).
+`operations/Build Gates.md`: run reference updated to `c466795`; Gate 3 CI table now cites
+`JetBrains/qodana-action@v2026.2.2`, matching `.github/workflows/build.yml:163`.

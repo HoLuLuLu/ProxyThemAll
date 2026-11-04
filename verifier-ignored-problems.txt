@@ -1,0 +1,2 @@
+org.holululu.proxythemall::Access to unresolved class com\.intellij\.openapi\.vcs\.changes\.ChangeListManager
+org.holululu.proxythemall::Access to unresolved class com\.intellij\.openapi\.vcs\.changes\.InvokeAfterUpdateMode

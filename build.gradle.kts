@@ -1,6 +1,7 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 
 plugins {
     id("java") // Java support
@@ -114,6 +115,12 @@ intellijPlatform {
         ides {
             recommended()
         }
+
+        // INTERNAL_API_USAGES is enforced by the allowlist guard on tasks.verifyPlugin instead
+        failureLevel = listOf(FailureLevel.COMPATIBILITY_PROBLEMS, FailureLevel.OVERRIDE_ONLY_API_USAGES)
+
+        // verifier 1.411 false positive for 2026.3 VCS content modules, see platform.jetbrains.com topic 5250, remove when verifier fixes it
+        ignoredProblemsFile = layout.projectDirectory.file("verifier-ignored-problems.txt")
     }
 }
 
@@ -156,6 +163,42 @@ tasks {
 
     test {
         useJUnitPlatform()
+    }
+
+    verifyPlugin {
+        val reports = verificationReportsDirectory // local val for configuration cache compatibility
+        doLast {
+            // Marketplace grandfathers existing usages only while their number and location are
+            // unchanged; see concepts/Platform API Constraints.md
+            val allowedCallers = listOf(
+                "org.holululu.proxythemall.services.ProxyService.disableProxy(ProxySettings)",
+                "org.holululu.proxythemall.services.ProxyService.enableProxy(ProxySettings)",
+                "org.holululu.proxythemall.services.ProxyService.forceEnableProxy()",
+                "org.holululu.proxythemall.services.ProxyRestoreService.restoreProxyToIntelliJ(ProxyInfo)",
+                "org.holululu.proxythemall.core.ProxyController.performGlobalCleanup()",
+            )
+
+            val unexpected = mutableListOf<String>()
+            reports.get().asFile.walkTopDown()
+                .filter { it.isFile && it.name == "internal-api-usages.txt" }
+                .forEach { file ->
+                    val lines = file.readLines().filter { it.isNotBlank() }
+                    if (lines.size > 5) {
+                        unexpected += "${file.path} has ${lines.size} lines (expected at most 5)"
+                    }
+                    unexpected += lines.filterNot { line ->
+                        line.contains("ProxySettings.setProxyConfiguration(") &&
+                            allowedCallers.any { caller -> line.contains("is invoked in $caller") }
+                    }
+                }
+
+            if (unexpected.isNotEmpty()) {
+                throw GradleException(
+                    "Unexpected internal API usages (only the 5 grandfathered setProxyConfiguration call sites are allowed):\n" +
+                        unexpected.joinToString("\n")
+                )
+            }
+        }
     }
 }
 

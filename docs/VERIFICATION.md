@@ -433,6 +433,31 @@ the file is in the Default Changelist.
 
 **Expect** `my.note=2` still present. (Regression check for the ordinary case.)
 
+### 6.6 Changelist filing resolves on 2026.3 (IU-263 only) ⚠️ key fix
+
+2026.3 moved VCS into a bundled plugin behind the `com.intellij.modules.vcs` alias; `plugin.xml` now
+declares that dependency so `ChangeListManager` keeps resolving. This has not been exercised in a real
+2026.3 IDE — this step is that exercise. `./gradlew runIde -PplatformVersion=263.7307.112` would
+recompile the plugin against 263 instead of testing the artifact Marketplace would actually receive,
+so this step installs the built zip into a real 2026.3 EAP instead.
+
+**Do**
+
+```bash
+./gradlew buildPlugin
+```
+
+In an installed IntelliJ IDEA 2026.3 EAP (build 263.*), open **Settings → Plugins → ⚙ → Install
+Plugin from Disk…**, choose `build/distributions/ProxyThemAll-<version>.zip`, and restart. Then
+repeat 6.1 (enable the proxy, confirm the ProxyThemAll changelist appears) and 6.3 (disable, confirm
+it disappears).
+
+**Expect** Same result as 6.1/6.3 — changelist filed, then removed when empty. The 2026.3 `idea.log`
+(macOS: `~/Library/Logs/JetBrains/IntelliJIdea2026.3/idea.log`) contains **no** `NoClassDefFoundError`
+for `com.intellij.openapi.vcs.changes.ChangeListManager`.
+❌ Without the `com.intellij.modules.vcs` dependency, `GradleProxyConfigurer.moveToProxyChangelist`
+would have no classloader path to `ChangeListManager` on 2026.3.
+
 ---
 
 ## 7. Backup & restore (secure storage)

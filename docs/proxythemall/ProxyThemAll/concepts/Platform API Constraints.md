@@ -2,8 +2,8 @@
 type: concept
 status: current
 tags: [platform-api, bytecode, kotlin, vcs, git, properties, lessons]
-verified: 2026-08-12
-verified-against: efb35cc
+verified: 2026-11-03
+verified-against: 1885550
 ---
 
 # Platform API Constraints
@@ -76,11 +76,13 @@ is unreachable via property syntax. Do not trust the inspection on platform type
 | `postStartupActivityPassed()` | (unannotated, query only) |
 
 There is no non-internal, non-deprecated way to register work. And internal API usage is a **build
-failure**, not a warning: `verifyPlugin` currently reports *0 internal API usages* across three IDEs
-(see [[Build Gates]]) — introducing one breaks the gate.
+failure**, not a warning: `verifyPlugin` now checks seven IDEs and reports *0 internal usages outside
+the 5 grandfathered `setProxyConfiguration` calls* (§3) — any other internal usage, on any IDE, fails
+the hand-written allowlist guard (see [[Build Gates]]). Calling a `StartupManager` member would be
+exactly such a usage.
 
 So the plugin uses the extension point instead: `<postStartupActivity>` in
-`src/main/resources/META-INF/plugin.xml:22` → `services/ProxyThemAllStartupActivity.kt`, a
+`src/main/resources/META-INF/plugin.xml:23` → `services/ProxyThemAllStartupActivity.kt`, a
 `ProjectActivity` with `suspend fun execute(project: Project)`.
 
 Consequence: the activity runs **once per opened project** while the setup is application-wide,
@@ -90,9 +92,10 @@ which is why `ProxyThemAllStartupService` guards with an `AtomicBoolean` CAS
 
 ---
 
-## 3. `ProxySettings.setProxyConfiguration` is Experimental and unavoidable
+## 3. `ProxySettings.setProxyConfiguration` is Internal (2026.3+) and unavoidable
 
-✅ verified, `javap -v com.intellij.util.net.ProxySettings`:
+✅ verified, `javap -v com.intellij.util.net.ProxySettings` against the 2024.3.6 jar — kept as
+history, the annotation it names is no longer current:
 
 ```
 public abstract void setProxyConfiguration(ProxyConfiguration);
@@ -100,16 +103,38 @@ public abstract void setProxyConfiguration(ProxyConfiguration);
     0: org.jetbrains.annotations.ApiStatus$Experimental
 ```
 
+✅ That annotation changed upstream. intellij-community commit `61904c9bed` (2026-08-03),
+"refactoring [platform]: protecting proxy settings modification API", moved the same method from
+`@ApiStatus.Experimental` to `@ApiStatus.Internal`. Plugin Verifier 1.411 confirms it on the 2026.3
+EAP build now in the default `recommended()` selection (`IU-263.7307.112`, see [[Build Gates]]):
+
+```
+Internal method com.intellij.util.net.ProxySettings.setProxyConfiguration(com.intellij.util.net.ProxyConfiguration arg0) : void
+is invoked in org.holululu.proxythemall.services.ProxyService.disableProxy(ProxySettings) : void.
+This method is marked with @org.jetbrains.annotations.ApiStatus.Internal annotation ...
+```
+(`build/reports/pluginVerifier/IU-263.7307.112/plugins/org.holululu.proxythemall/0.0.7/internal-api-usages.txt`)
+
 `getProxyConfiguration()` carries only `@NotNull`. The whole interface is those two methods plus
 `getInstance()` — see [[Change Detection]] for why that also means "no change topic".
 
-It is the **only** way to change the IDE proxy, which is the plugin's entire purpose. Suppressed
-deliberately at class level: `@Suppress("UnstableApiUsage")` on `ProxyService`
-(`services/ProxyService.kt:20`, rationale at `:14-15`), on
-`ProxyRestoreService.restoreProxyToIntelliJ` (`:127`) and on
-`ProxyController.performGlobalCleanup` (`:288`).
+It is the **only** way to change the IDE proxy, which is the plugin's entire purpose. Three
+alternatives were considered and rejected:
 
-Five call sites, one method:
+- ✅ **`HttpConfigurable` fields directly.** In 2024.3 bytecode
+  (`OverrideCapableProxySettingsImpl` → `ProxySettingsCompatibilityImpl` →
+  `HttpConfigurableMigrationUtilsKt.setFromProxyConfiguration`) and in 2026.3 source
+  (`OverrideCapableProxySettings.setProxyConfiguration` → `httpConfigurable.setFromProxyState`), the
+  setter *itself* writes `HttpConfigurable` fields under the hood either way. Those fields are
+  `@Deprecated(forRemoval = true)` — calling them directly trades one unstable annotation for one
+  scheduled for removal. Rejected by the user.
+- ✅ **`ProxySettingsOverrideProvider`.** `shouldUserSettingsBeOverriden` is cached once (an extension
+  point `computeIfAbsent`), and overriding it locks the user out of their own settings entirely — it
+  solves "enforce an admin proxy," not "change the proxy on the user's behalf." Doesn't fit.
+- Reflection. JetBrains staff describe it as a "road to ban" under the Marketplace ToS
+  (platform.jetbrains.com topics 4272, 4692). Not used.
+
+Five call sites, one method, unaffected by the reclassification:
 
 | Call site | Line |
 |---|---|
@@ -119,9 +144,57 @@ Five call sites, one method:
 | `ProxyRestoreService.restoreProxyToIntelliJ` | `ProxyRestoreService.kt:143` |
 | `ProxyController.performGlobalCleanup` | `ProxyController.kt:293` |
 
-Experimental API usage is *reported* by the verifier but does not fail it — exactly 5 usages on all
-three verified IDEs. Internal API usage would fail. The distinction matters: this is a tolerated
-risk, item 2 is not.
+Suppressed deliberately at class level: `@Suppress("UnstableApiUsage")` on `ProxyService`
+(`services/ProxyService.kt:20`, rationale at `:14-15`), on
+`ProxyRestoreService.restoreProxyToIntelliJ` (`:127`) and on
+`ProxyController.performGlobalCleanup` (`:288`).
+
+**Internal API usage fails `verifyPlugin` by default — and `-ignoredProblemsFile` cannot rescue it.**
+`IgnoredProblemsFilter` only matches `CompatibilityProblem`; an internal-API-usage report is a
+different type and never reaches that filter, so the ignore-file mechanism used for item 11 below
+cannot tolerate these five lines. Instead, `build.gradle.kts:120` sets
+`failureLevel = listOf(FailureLevel.COMPATIBILITY_PROBLEMS, FailureLevel.OVERRIDE_ONLY_API_USAGES)` —
+deliberately *excluding* `FailureLevel.INTERNAL_API_USAGES`, which IntelliJ Platform Gradle Plugin
+2.19.0's own default already includes: ✅ `IntelliJPlatformExtension.kt`'s
+`failureLevel.convention(listOf(FailureLevel.COMPATIBILITY_PROBLEMS, FailureLevel.INTERNAL_API_USAGES,
+FailureLevel.OVERRIDE_ONLY_API_USAGES))`, read from the plugin's own source (not recalled as `ALL`,
+which this section previously and wrongly claimed) — and a `doLast` on `tasks.verifyPlugin`
+(`build.gradle.kts:168-202`) re-implements the gate by hand: it walks every `internal-api-usages.txt`
+under the verification reports directory and throws `Unexpected internal API usages (only the 5
+grandfathered setProxyConfiguration call sites are allowed): ...` (message at `build.gradle.kts:197`)
+unless every line names one of the five callers in the `allowedCallers` list
+(`build.gradle.kts:173-179`).
+
+The guarantee this gives is narrower than "a sixth usage anywhere fails." ⚠️ By reviewer `javap`
+against Plugin Verifier 1.411, `InternalMethodUsage` equality (and the `Set`-like collection it is
+deduplicated through — inferred from the output shape, not executed) covers only the API element and
+the *usage location*, and a usage location is a calling **method**, with no line number. A second call
+to `setProxyConfiguration` added inside one of the five already-allowed methods therefore produces no
+new report line — it is invisible to this guard, and, since Marketplace review runs the same verifier,
+also invisible to Marketplace. What does fail the build is a usage reported from any **new or renamed
+calling method**: that method is a different usage location, so it is neither in `allowedCallers` nor
+accounted for by the existing five lines. The `lines.size > 5` check (`build.gradle.kts:186-188`) stays
+in `build.gradle.kts` as a backstop for this: it does not catch an extra call hidden inside an
+already-allowed method, but it does catch the case where the inferred dedup-by-method behaviour above
+is wrong, or a future verifier release starts reporting per-call-site instead of per-method.
+
+⚠️ **Marketplace policy — JetBrains staff forum statements, not written policy** (all
+platform.jetbrains.com, staff member yuriy.artamonov):
+
+- topic 4895: *"Most likely we will never approve such new usages in a plugin and the version will
+  not be published."*
+- topic 4692: *"we try to approve all existing usages till next Major release"*, conditioned on
+  "[not blocked] until number of usages changes / new files with errors appear" — surfaced to the
+  author as an "Ignored Internal API usages" group in the plugin check results.
+- topic 4628: *"will continue publishing automatically till 2026.3 at least ... We will enforce it
+  only once we have full one Major release covered."*
+- topic 4169: once an API is promoted *to* Experimental, *"it will not be a problem for approvals
+  anymore"* — the inverse direction of what just happened here.
+
+Approval Guidelines §2.1.d ("The Plugin does not violate JetBrains' internal API usage") is the
+written rule the forum posts are explaining around it. Marketplace approved plugin version 0.0.7
+(id 28611) with exactly these 5 usages, consistent with the "existing usages tolerated" reading. See
+the open risk in [[Defect Register]] for what happens when the grandfathering window ends.
 
 ---
 
@@ -336,6 +409,59 @@ value memory-only, which was [[Restored Password Not Persisted]].
 
 ---
 
+## 11. 2026.3 splits VCS into a bundled plugin — `com.intellij.modules.vcs` is the alias, and Plugin Verifier 1.411 cannot see through it yet
+
+✅ JetBrains "api-changes-list-2026": "VCS moved to a bundled plugin (2026.3)", plugin id
+`com.intellij.platform.vcs`; "A dependency on the `com.intellij.modules.vcs` plugin alias is
+sufficient."
+
+✅ Confirmed against the resolved `263.7307.112` jars: `ChangeListManager` now lives in
+`plugins/platform-vcs-plugin/lib/modules/intellij.platform.vcs.jar`. The alias
+`com.intellij.modules.vcs` is declared by content module `intellij.platform.vcs.impl`, which itself
+depends on `intellij.platform.vcs`. `Git4Idea`'s main module depends only on
+`intellij.platform.ide.impl` — the VCS dependency sits on *its* content module, not the main one — so
+without an explicit dependency on the alias, there is no classloader path from this plugin to
+`ChangeListManager` on 2026.3.
+
+Fix: `src/main/resources/META-INF/plugin.xml:8` adds `<depends>com.intellij.modules.vcs</depends>`,
+alongside the pre-existing `<depends>com.intellij.modules.platform</depends>` (`:7`) and
+`<depends>Git4Idea</depends>` (`:12`).
+
+✅ The alias is present in the 2024.3.6 `app.jar` too, so the `<depends>` is harmless there. ⚠️
+`intellij.platform.vcs` is **absent** from the 243/251/252 product-info layout, so the stronger form,
+`<dependencies><module name="intellij.platform.vcs"/></dependencies>`, would break those three IDEs —
+not used; the plugin-alias `<depends>` is the form that works across 243 and 263 at once.
+
+⚠️ **Open risk, inferred not executed.** Runtime classloading goes through
+`MultiParentClassLoaderHelper`, which "resolves the transitive closure of parent classloaders" — by
+source reading, the dependency above should make `ChangeListManager` resolvable from this plugin's
+classloader on 2026.3. This has **not** been exercised in an actual 2026.3 sandbox; see the matching
+open risk in [[Defect Register]] and the mitigation step at `docs/VERIFICATION.md` §6.6.
+
+**Plugin Verifier 1.411 still reports it as broken anyway — a verifier false positive, not a real
+problem.** Even with the `<depends>` in place, the verifier emits 6 "Access to unresolved class"
+problems for `ChangeListManager` and `InvokeAfterUpdateMode` against `IU-263.7307.112`. Same symptom
+reported independently on platform.jetbrains.com topic 5250 (2026-10-14); JetBrains staff response:
+"new version of IntelliJ Plugin Verifier very soon." Worked around via `verifier-ignored-problems.txt`
+(repo root, 2 lines, matched with `.matches()` against each problem's `shortDescription`):
+
+```
+org.holululu.proxythemall::Access to unresolved class com\.intellij\.openapi\.vcs\.changes\.ChangeListManager
+org.holululu.proxythemall::Access to unresolved class com\.intellij\.openapi\.vcs\.changes\.InvokeAfterUpdateMode
+```
+
+wired in at `build.gradle.kts:123`
+(`ignoredProblemsFile = layout.projectDirectory.file("verifier-ignored-problems.txt")`). This is a
+workaround for a verifier bug, not evidence the classes actually resolve — **remove both lines the
+day the verifier stops reporting them**, and do not add further entries to that file without the same
+kind of evidence (a specific verifier version plus an upstream issue, not "it's probably fine").
+
+Affected code: `GradleProxyConfigurer.moveToProxyChangelist`, `cleanupProxyThemAllChangelist` (plus
+their `invokeAfterUpdate` lambdas) — see item 4 above, which this item does not change, only adds a
+module-resolution precondition in front of.
+
+---
+
 ## The rule
 
 **Never assert platform behaviour from memory. Check the bytecode or run it.**
@@ -359,4 +485,5 @@ memory is not evidence — and note that four of the six above were *plausible*.
 
 [[Change Detection]] · [[Credential Handling]] · [[Gradle Properties Management]] ·
 [[Changelist Integration]] · [[Lifecycle and Leaks]] · [[Non Compiling Commit]] ·
-[[Global Git Config Deleted]] · [[JvmArgs Clobbered]] · [[Widget Project Leak]] · [[Build Gates]]
+[[Global Git Config Deleted]] · [[JvmArgs Clobbered]] · [[Widget Project Leak]] · [[Build Gates]] ·
+[[Defect Register]]
