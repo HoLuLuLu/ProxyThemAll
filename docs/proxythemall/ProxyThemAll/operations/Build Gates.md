@@ -2,14 +2,14 @@
 type: operation
 status: current
 tags: [build, gradle, ci, verifier, coverage]
-verified: 2026-11-03
-verified-against: 1885550
+verified: 2026-11-04
+verified-against: c466795
 ---
 
 # Build Gates
 
 What stops a bad change, and where. Everything below was **✅ executed** (`./gradlew check`,
-`./gradlew verifyPlugin`, both `BUILD SUCCESSFUL`) — most recently on the working tree at `e6c7763`
+`./gradlew verifyPlugin`, both `BUILD SUCCESSFUL`) — most recently on `c466795`
 (branch `fix/verify-plugin-internal-api`); the prior run this page documented was on `efb35cc`, the
 squash-merge commit on `main`.
 
@@ -122,7 +122,7 @@ own before anything else.
 |---|---|---|---|
 | `build` | — | `./gradlew buildPlugin` + artifact upload | none (implied by others) |
 | `test` | build | `./gradlew check`, then `codecov/codecov-action@v7` on `build/reports/kover/report.xml` | Run Tests |
-| `inspectCode` | build | `JetBrains/qodana-action@v2026.2.0` — **no `gradlew` at all** | none |
+| `inspectCode` | build | `JetBrains/qodana-action@v2026.2.2` — **no `gradlew` at all** | none |
 | `verify` | build | `./gradlew verifyPlugin` + report upload | Run Verifications |
 | `releaseDraft` | build, test, inspectCode, verify | `./gradlew properties --property version`, `./gradlew getChangelog --unreleased`, `gh release create --draft` | none |
 

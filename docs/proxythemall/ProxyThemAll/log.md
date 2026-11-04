@@ -306,3 +306,10 @@ Pages touched: `concepts/Platform API Constraints.md`, `operations/Build Gates.m
 `decisions/Coverage Floor Not Target.md`, `docs/VERIFICATION.md`. Re-stamped
 `verified-against: 1885550`: `Platform API Constraints.md`, `Build Gates.md`, `Defect Register.md`,
 `Lifecycle and Leaks.md`.
+
+## [2026-11-04] lint | Leftovers from the whole-branch review
+
+`ProxyService.kt:14` comment updated from "marked experimental" to "`@ApiStatus.Internal` since
+2026.3" (user-approved; line numbers unchanged, so `ProxyService.kt:14-15` citations still hold).
+`operations/Build Gates.md`: run reference updated to `c466795`; Gate 3 CI table now cites
+`JetBrains/qodana-action@v2026.2.2`, matching `.github/workflows/build.yml:163`.

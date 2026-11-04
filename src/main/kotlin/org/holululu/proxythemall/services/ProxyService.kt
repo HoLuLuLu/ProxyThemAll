@@ -11,7 +11,7 @@ import org.holululu.proxythemall.models.ProxyState
  * This service coordinates with the modern ProxyConfiguration API and works
  * alongside GitProxyService and GradleProxyService to provide unified proxy management.
  *
- * ProxySettings.setProxyConfiguration is marked experimental by the platform but is the only way
+ * ProxySettings.setProxyConfiguration is @ApiStatus.Internal since 2026.3 but is the only way
  * to change the IDE proxy, which is this plugin's entire purpose.
  *
  * @param proxySettings The ProxySettings instance to use. Defaults to the platform singleton.
